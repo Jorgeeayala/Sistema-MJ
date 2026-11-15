@@ -22,10 +22,38 @@ const ETIQUETA_HERRAMIENTA = {
   estado_iva: 'el IVA del período',
   liquidacion_iva: 'la liquidación de IVA',
   vencimiento_iva: 'el calendario de vencimientos',
+  vencimientos_por_fecha: 'los vencimientos',
 };
 
 function fechaHoyLarga() {
   return new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function fechaHoyIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Las instrucciones se arman una vez por conversación: con el "pensamiento"
+// de Haiku 5.5 la conversación tiene que ser sólo de agregar (cambiar las
+// instrucciones a mitad de camino invalida lo ya pensado).
+function armarSystem(d) {
+  const p = initialPeriodo(d.year, d.month);
+  return [
+    { type: 'text', text: INSTRUCCIONES },
+    {
+      type: 'text',
+      text: contextoSesion({
+        user: d.user,
+        userRole: d.userRole,
+        year: d.year,
+        month: d.month,
+        periodoFiscal: p + ' (' + perLabel(p) + ')',
+        fechaHoy: fechaHoyLarga(),
+        fechaIso: fechaHoyIso(),
+      }),
+    },
+  ];
 }
 
 // ── Texto con formato mínimo (párrafos, listas y **negrita**) ───────────
@@ -80,7 +108,8 @@ function mensajesVisibles(historial) {
         .map((b) => b.text)
         .join('\n')
         .trim();
-      if (texto) out.push({ id: i, rol: 'assistant', texto });
+      // Sólo se muestra: lo que devolvió la API no se toca (append-only).
+      out.push({ id: i, rol: 'assistant', texto: texto || 'No obtuve una respuesta para eso. ¿Podés reformular la pregunta?' });
     }
   });
   return out;
@@ -99,6 +128,7 @@ export default function AgentePanel({ open, onClose }) {
   const inputRef = useRef(null);
   const panelRef = useRef(null);
   const ocupadoRef = useRef(false);
+  const systemRef = useRef(null);
 
   // Las herramientas leen siempre los datos más recientes de la planilla.
   const datosRef = useRef(null);
@@ -135,20 +165,8 @@ export default function AgentePanel({ open, onClose }) {
     const d = datosRef.current;
     // Un ejecutor por pregunta: comparte la carga del IVA entre herramientas.
     const ejecutar = crearEjecutor(d);
-    const system = [
-      { type: 'text', text: INSTRUCCIONES },
-      {
-        type: 'text',
-        text: contextoSesion({
-          user: d.user,
-          userRole: d.userRole,
-          year: d.year,
-          month: d.month,
-          periodoFiscal: (() => { const p = initialPeriodo(d.year, d.month); return p + ' (' + perLabel(p) + ')'; })(),
-          fechaHoy: fechaHoyLarga(),
-        }),
-      },
-    ];
+    if (!previo.length || !systemRef.current) systemRef.current = armarSystem(d);
+    const system = systemRef.current;
 
     let conv = [...previo, { role: 'user', content: texto }];
     setHistorial(conv);
@@ -197,6 +215,7 @@ export default function AgentePanel({ open, onClose }) {
   const nueva = () => {
     if (ocupadoRef.current) return;
     setHistorial([]);
+    systemRef.current = null;
     setError('');
     setBorrador('');
     inputRef.current?.focus();
