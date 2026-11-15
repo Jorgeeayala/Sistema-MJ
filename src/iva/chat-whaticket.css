@@ -264,7 +264,9 @@
   cursor: default;
 }
 
-.wtc-textarea {
+/* Selector doble: el módulo IVA tiene ".iva-root textarea", que si no pisaría
+   el fondo (y en modo oscuro quedaba letra oscura sobre fondo oscuro). */
+.wtc-overlay .wtc-textarea {
   width: 100%;
   box-sizing: border-box;
   min-height: 44px;
@@ -303,4 +305,78 @@
   background: #1f9d55;
   color: #fff;
   cursor: pointer;
+}
+
+/* ── Modo oscuro (colores como WhatsApp oscuro) ───────────────────────── */
+[data-theme='dark'] .wtc-msg {
+  background: #202c33;
+  color: #e9edef;
+}
+
+[data-theme='dark'] .wtc-msg.is-mio {
+  background: #005c4b;
+}
+
+[data-theme='dark'] .wtc-msg.is-nota {
+  background: #4a4116;
+}
+
+[data-theme='dark'] .wtc-msg-etiqueta {
+  color: #ffd27a;
+}
+
+[data-theme='dark'] .wtc-msg-pie {
+  color: #8696a0;
+}
+
+[data-theme='dark'] .wtc-msg-archivo {
+  color: #53bdeb;
+}
+
+[data-theme='dark'] .wtc-aviso,
+[data-theme='dark'] .wtc-anteriores {
+  background: #182229;
+  color: #c7d0d5;
+}
+
+[data-theme='dark'] .wtc-anteriores {
+  color: #53bdeb;
+}
+
+[data-theme='dark'] .wtc-aviso.is-error {
+  background: #4a1f1f;
+  color: #ffb4b4;
+}
+
+[data-theme='dark'] .wtc-ficha {
+  background: #13261c;
+  border-color: #2fa866;
+  color: #e9edef;
+}
+
+[data-theme='dark'] .wtc-ficha-img,
+[data-theme='dark'] .wtc-ficha-nota {
+  color: #aebac1;
+}
+
+[data-theme='dark'] .wtc-overlay .wtc-textarea {
+  border-color: #3b4a54;
+  background: #2a3942;
+  color: #e9edef;
+}
+
+[data-theme='dark'] .wtc-overlay .wtc-textarea::placeholder {
+  color: #8696a0;
+}
+
+[data-theme='dark'] .wtc-btn {
+  border-color: #3b4a54;
+  background: #202c33;
+  color: #e9edef;
+}
+
+[data-theme='dark'] .wtc-btn.is-primario {
+  border-color: #1f9d55;
+  background: #1f9d55;
+  color: #fff;
 }

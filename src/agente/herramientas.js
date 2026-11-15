@@ -18,7 +18,9 @@ import {
   diasRetraso,
   fechaCorta,
   fichaModel,
+  fromIso,
   gs,
+  iso,
   lastDigit,
   normalizeConfig,
   perLabel,
@@ -26,6 +28,7 @@ import {
   shiftPer,
   splitRuc,
   vencAuto,
+  ym,
   vencDe,
   waMensaje,
   waTelefono,
@@ -138,6 +141,23 @@ export const HERRAMIENTAS = [
         periodo: { type: 'string', description: 'Período fiscal AAAA-MM. Opcional.' },
       },
       required: ['cliente'],
+    },
+  },
+  {
+    name: 'vencimientos_por_fecha',
+    description:
+      'Qué vence de IVA en una fecha o rango de fechas: "hoy", "mañana", "esta semana", "el 17", "del 10 al 20". ' +
+      'Devuelve, por cada fecha, qué terminación de RUC (VENC.) vence y los clientes de la cartera que vencen ese día, ' +
+      'con encargado, estado de la liquidación, resultado y monto. Usala para cualquier pregunta sobre vencimientos por fecha. ' +
+      'Calculá las fechas a partir de la fecha de hoy que figura en la sesión.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        desde: { type: 'string', description: 'Fecha inicial AAAA-MM-DD. Por defecto, hoy.' },
+        hasta: { type: 'string', description: 'Fecha final AAAA-MM-DD, hasta 31 días después de "desde". Por defecto igual a "desde".' },
+        solo_pendientes: { type: 'boolean', description: 'true para omitir los clientes ya presentados.' },
+        encargado: { type: 'string', description: 'Nombre del encargado. "yo" para el usuario actual.' },
+      },
     },
   },
   {
@@ -418,6 +438,87 @@ export function crearEjecutor(ctx) {
         intereses: k.interes,
         nota_interna: l.nota || '',
         mensaje_whatsapp: waMensaje(fctx, l),
+      };
+    },
+
+    async vencimientos_por_fecha(input = {}) {
+      const leerFecha = (valor, defecto) => {
+        const t = texto(valor);
+        if (!t) return defecto;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) throw new Error('Fecha inválida "' + t + '": usá el formato AAAA-MM-DD.');
+        return fromIso(t);
+      };
+      const ahora = new Date();
+      const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+      let desde = leerFecha(input.desde, hoy);
+      let hasta = leerFecha(input.hasta, desde);
+      if (hasta < desde) [desde, hasta] = [hasta, desde];
+      const dias = Math.round((hasta - desde) / 86_400_000);
+      if (dias > 31) throw new Error('El rango es muy largo: pedí hasta 31 días.');
+
+      // El IVA que vence en un mes es el del período fiscal del mes anterior.
+      const periodos = new Set();
+      for (let i = 0; i <= dias; i++) {
+        const d = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + i);
+        periodos.add(ym(d.getFullYear(), d.getMonth() - 1));
+      }
+      const desdeIso = iso(desde);
+      const hastaIso = iso(hasta);
+      const enRango = (fecha) => fecha && iso(fecha) >= desdeIso && iso(fecha) <= hastaIso;
+      const quien = texto(input.encargado) ? encargadoBuscado(input.encargado) : '';
+
+      const porFecha = new Map();
+      const calendario = [];
+      for (const periodo of periodos) {
+        const { liq, clientes, config } = await cargarIva(periodo);
+        for (let t = 0; t <= 9; t++) {
+          const v = vencAuto(config, t, periodo);
+          if (enRango(v.fecha)) calendario.push({ fecha: fechaCorta(v.fecha), venc_digito: t, periodo_fiscal: perLabel(periodo), dia_inhabil: v.inhabil });
+        }
+        filas().forEach((f) => {
+          if (quien && !mismaPersona(f.encargado, quien)) return;
+          const c = clienteIva(f, clientes);
+          if (!c.ruc) return;
+          const l = liq[c.ruc];
+          const v = vencDe(config, c, l, periodo);
+          if (!v || !enRango(v.fecha)) return;
+          const estado = l ? (l.estado || 'pend') : 'none';
+          if (input.solo_pendientes && estado === 'pres') return;
+          const k = l ? calc(l, { config, cliente: c, periodo }) : null;
+          const clave = iso(v.fecha);
+          if (!porFecha.has(clave)) porFecha.set(clave, []);
+          porFecha.get(clave).push({
+            cliente: c.nombre,
+            ruc: rucTexto(c),
+            encargado: f.encargado || '(sin asignar)',
+            periodo_fiscal: perLabel(periodo),
+            estado: estado === 'none' ? 'Sin cargar' : ESTADOS[estado],
+            resultado: !k ? '' : k.pagar > 0 ? 'A pagar' : k.favor > 0 ? 'A favor' : 'Sin saldo',
+            monto_gs: !k ? null : k.pagar > 0 ? k.pagar : k.favor,
+            vencimiento_manual: Boolean(v.manual),
+          });
+        });
+      }
+
+      let restantes = LIMITE_MAX;
+      const fechas = [...porFecha.keys()].sort().map((clave) => {
+        const lista = porFecha.get(clave).sort((a, b) => a.cliente.localeCompare(b.cliente));
+        const mostrados = lista.slice(0, Math.max(0, restantes));
+        restantes -= mostrados.length;
+        return {
+          fecha: fechaCorta(fromIso(clave)),
+          total_clientes: lista.length,
+          presentados: lista.filter((x) => x.estado === ESTADOS.pres).length,
+          clientes: mostrados,
+          ...(mostrados.length < lista.length ? { aviso: 'Lista recortada: pedí un rango más corto o filtrá por encargado.' } : {}),
+        };
+      });
+      return {
+        desde: fechaCorta(desde),
+        hasta: fechaCorta(hasta),
+        calendario_venc: calendario.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.venc_digito - b.venc_digito),
+        fechas_con_clientes: fechas,
+        nota: fechas.length ? '' : 'Ningún cliente de la cartera vence en esas fechas.',
       };
     },
 

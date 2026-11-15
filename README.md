@@ -149,6 +149,7 @@ del Web App además de publicar el frontend.
    |---|---|
    | `ANTHROPIC_API_KEY` | Clave de [console.anthropic.com](https://console.anthropic.com) (API Keys). Sin ella el asistente queda apagado. |
    | `AGENTE_MODELO` | Opcional. Por defecto `claude-haiku-5-5`. |
+   | `AGENTE_ESFUERZO` | Opcional. `low`, `medium` (por defecto) o `high`: cuánto "piensa" el modelo antes de responder. |
    | `AGENTE_LIMITE_DIARIO` | Opcional. Consultas por usuario y por día (200 por defecto). |
    | `WHATICKET_TOKEN` | Clave del token de Whaticket. Sin ella el botón sigue como antes. |
    | `WHATICKET_GRUPO_NOMBRE` | Nombre exacto del grupo contable como aparece en Whaticket. |

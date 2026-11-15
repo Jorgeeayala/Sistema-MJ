@@ -159,6 +159,7 @@ function agenteSimulado(messages) {
       try { data = JSON.parse(b.content); } catch { /* texto */ }
       if (data.error) return 'No pude: ' + data.error;
       if (data.total_clientes !== undefined) return `**Resumen de ${data.hoja}**\n- Clientes: ${data.total_clientes}\n- Presentados: ${data.presentados}\n- Pendientes: ${data.pendientes}\n- Avance: ${data.avance_pct} %`;
+      if (data.fechas_con_clientes) return `Vencimientos del ${data.desde} al ${data.hasta}:\n` + data.calendario_venc.map((c) => `- ${c.fecha}: VENC. ${c.venc_digito}`).join('\n') + `\nClientes: ${data.fechas_con_clientes.reduce((n, f) => n + f.total_clientes, 0)}`;
       if (data.totales_del_periodo) return `IVA ${data.periodo_fiscal}: ${data.encontrados} clientes coinciden.\n` + (data.clientes || []).slice(0, 3).map((c) => `- ${c.cliente}: ${c.estado}, vence ${c.vence}${c.dias_retraso ? ` (**${c.dias_retraso} días de retraso**)` : ''}`).join('\n');
       if (data.clientes) return `Encontré **${data.encontrados}** clientes:\n` + data.clientes.slice(0, 5).map((c) => `- ${c.cliente} (vence día ${c.vence_dia})`).join('\n');
       if (data.columnas) return `Ficha de **${data.cliente}**: ` + Object.keys(data.columnas).join(', ');
@@ -170,10 +171,13 @@ function agenteSimulado(messages) {
   const usar = (name, input) => ({
     stop_reason: 'tool_use',
     content: [
+      // Haiku 5.5 piensa por defecto: el bloque tiene que volver tal cual.
+      { type: 'thinking', thinking: '', signature: 'firma-simulada' },
       { type: 'text', text: 'Dejame revisar.' },
       { type: 'tool_use', id: 'toolu_' + Math.random().toString(36).slice(2), name, input },
     ],
   });
+  if (/hoy|semana|ma[ñn]ana/.test(q)) return usar('vencimientos_por_fecha', { desde: '2026-11-16', hasta: '2026-11-22' });
   if (/iva|vencid/.test(q)) return usar('estado_iva', { estado: 'no_presentado', limite: 10 });
   if (/c[oó]mo viene|mes/.test(q)) return usar('resumen_periodo', {});
   if (/m[ií]os|mis /.test(q)) return usar('buscar_clientes', { encargado: 'yo', estado: 'pendiente' });
@@ -515,6 +519,13 @@ export async function handle(body) {
       };
     case 'agenteMensaje': {
       agentePedidos.push({ system: body.system, tools: body.tools, messages: body.messages });
+      // Igual que la API real: si se devuelve un resultado de herramienta, el
+      // pensamiento del turno anterior tiene que venir intacto.
+      const penultimo = body.messages?.[body.messages.length - 2];
+      if (penultimo?.role === 'assistant' && Array.isArray(penultimo.content) && penultimo.content.some((b) => b.type === 'tool_use') &&
+          !penultimo.content.some((b) => b.type === 'thinking' && b.signature === 'firma-simulada')) {
+        return { ok: false, code: 'AGENTE_API_ERROR', error: 'No se pudo consultar a la IA (thinking blocks must be passed back).' };
+      }
       if (!Array.isArray(body.messages) || !body.messages.length) {
         return { ok: false, code: 'AGENTE_ERROR', error: 'Conversación inválida' };
       }

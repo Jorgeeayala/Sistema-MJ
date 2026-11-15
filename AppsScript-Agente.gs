@@ -12,6 +12,8 @@
  *        ANTHROPIC_API_KEY        clave de console.anthropic.com (obligatoria
  *                                 para el asistente).
  *        AGENTE_MODELO            opcional. Por defecto "claude-haiku-5-5".
+ *        AGENTE_ESFUERZO          opcional. low | medium | high (por
+ *                                 defecto medium).
  *        AGENTE_LIMITE_DIARIO     opcional. Consultas a la IA por usuario y
  *                                 por día. Por defecto 200.
  *   4. Implementar > Administrar implementaciones > editar > Nueva versión.
@@ -31,7 +33,11 @@
 const AGENTE_API_URL = 'https://api.anthropic.com/v1/messages';
 const AGENTE_API_VERSION = '2023-06-01';
 const AGENTE_MODELO_DEFAULT = 'claude-haiku-5-5';
-const AGENTE_MAX_TOKENS = 1500;
+// Incluye el "pensamiento" del modelo (Haiku 5.5 piensa por defecto) más la
+// respuesta. El texto final suele ser corto; el tope sólo evita excesos.
+const AGENTE_MAX_TOKENS = 4000;
+// Esfuerzo del modelo: low | medium | high. "medium" equilibra calidad y costo.
+const AGENTE_ESFUERZO_DEFAULT = 'medium';
 const AGENTE_LIMITE_DIARIO_DEFAULT = 200;
 const AGENTE_MAX_PAYLOAD_CHARS = 400000;
 const AGENTE_MAX_MENSAJES = 80;
@@ -55,9 +61,11 @@ function agenteProp(name) {
 
 function agenteConfig() {
   const limite = parseInt(agenteProp('AGENTE_LIMITE_DIARIO'), 10);
+  const esfuerzo = agenteProp('AGENTE_ESFUERZO').toLowerCase();
   return {
     apiKey: agenteProp('ANTHROPIC_API_KEY'),
     modelo: agenteProp('AGENTE_MODELO') || AGENTE_MODELO_DEFAULT,
+    esfuerzo: /^(low|medium|high)$/.test(esfuerzo) ? esfuerzo : AGENTE_ESFUERZO_DEFAULT,
     limiteDiario: limite > 0 ? limite : AGENTE_LIMITE_DIARIO_DEFAULT
   };
 }
@@ -118,7 +126,14 @@ function reservarConsulta(sessionUser, limite) {
 // Sólo se reenvía a la API lo que hace falta y con la forma esperada: el
 // modelo, el tope de respuesta y el resto de los parámetros los fija el
 // servidor, no el navegador.
-const AGENTE_BLOQUES_PERMITIDOS = { text: true, tool_use: true, tool_result: true };
+// Lo que escribe la persona (o la app con resultados de herramientas) y lo que
+// devolvió el modelo. Los bloques de "pensamiento" (thinking y
+// redacted_thinking) los genera Haiku 5.5 por defecto y la API exige que
+// vuelvan tal cual en la conversación con herramientas.
+const AGENTE_BLOQUES_PERMITIDOS = {
+  user: { text: true, tool_result: true },
+  assistant: { text: true, tool_use: true, thinking: true, redacted_thinking: true }
+};
 
 function limpiarSystem(system) {
   if (typeof system === 'string') return system.slice(0, 60000);
@@ -149,8 +164,9 @@ function limpiarMensajes(messages) {
     if (!m || (m.role !== 'user' && m.role !== 'assistant')) throw new Error('Mensaje inválido');
     if (typeof m.content === 'string') return { role: m.role, content: m.content };
     if (!Array.isArray(m.content)) throw new Error('Mensaje inválido');
+    const permitidos = AGENTE_BLOQUES_PERMITIDOS[m.role];
     m.content.forEach(function (b) {
-      if (!b || !AGENTE_BLOQUES_PERMITIDOS[b.type]) throw new Error('Tipo de contenido no permitido');
+      if (!b || !permitidos[b.type]) throw new Error('Tipo de contenido no permitido (' + (b && b.type) + ')');
     });
     return { role: m.role, content: m.content };
   });
@@ -166,6 +182,7 @@ function handleAgenteMensaje(body, sessionUser) {
   const payload = {
     model: cfg.modelo,
     max_tokens: AGENTE_MAX_TOKENS,
+    output_config: { effort: cfg.esfuerzo },
     // Caché automático: las instrucciones, las herramientas y lo ya hablado
     // se cobran ~10 veces más barato en las consultas siguientes.
     cache_control: { type: 'ephemeral' },
