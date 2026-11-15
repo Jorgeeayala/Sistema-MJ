@@ -1,0 +1,306 @@
+/* Chat de un cliente en Whaticket, dentro de Sistema MJ. */
+.wtc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  background: rgba(15, 20, 25, 0.55);
+}
+
+.wtc-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100vw);
+  height: 100%;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
+}
+
+.wtc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--rx-line, #d2d3d6);
+  background: var(--rx-surface, #fff);
+}
+
+.wtc-iconbtn {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rx-ink, #303031);
+  cursor: pointer;
+}
+
+.wtc-iconbtn:hover {
+  background: var(--rx-soft, #f4f5f6);
+}
+
+.wtc-avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #25d366;
+  color: #fff;
+  font-weight: 700;
+}
+
+.wtc-head-txt {
+  flex: 1;
+  min-width: 0;
+}
+
+.wtc-nombre {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wtc-sub {
+  color: var(--rx-subtle, #737c85);
+  font-size: 13px;
+}
+
+.wtc-lista {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 14px 18px;
+  background: #efeae2;
+}
+
+[data-theme='dark'] .wtc-lista {
+  background: #0b141a;
+}
+
+.wtc-anteriores {
+  align-self: center;
+  margin-bottom: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #27658d;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wtc-aviso {
+  align-self: center;
+  max-width: 90%;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4a4f55;
+  font-size: 13px;
+  text-align: center;
+}
+
+.wtc-aviso.is-error {
+  background: #fdecec;
+  color: #a02828;
+}
+
+.wtc-msg {
+  align-self: flex-start;
+  max-width: min(80%, 460px);
+  padding: 6px 9px 4px;
+  border-radius: 10px;
+  border-top-left-radius: 2px;
+  background: #ffffff;
+  color: #111b21;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.wtc-msg.is-mio {
+  align-self: flex-end;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 2px;
+  background: #d9fdd3;
+}
+
+.wtc-msg.is-nota {
+  background: #fff4c2;
+}
+
+.wtc-msg-etiqueta {
+  margin-bottom: 2px;
+  color: #8a6d00;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wtc-msg-img img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+}
+
+.wtc-msg-archivo {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: #027eb5;
+}
+
+.wtc-msg-texto {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wtc-msg-pie {
+  margin-top: 2px;
+  color: #667781;
+  font-size: 11px;
+  text-align: right;
+}
+
+.wtc-ack.is-leido {
+  color: #53bdeb;
+}
+
+.wtc-ficha {
+  align-self: flex-end;
+  width: min(100%, 420px);
+  margin-top: 8px;
+  padding: 10px;
+  border: 2px dashed #25a35a;
+  border-radius: 12px;
+  background: #f4fff1;
+  color: #1d2a22;
+}
+
+.wtc-ficha-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.wtc-ficha-img {
+  display: grid;
+  place-items: center;
+  min-height: 100px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #5a5e62;
+}
+
+.wtc-ficha-img img {
+  max-width: 100%;
+  max-height: 38vh;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.wtc-ficha-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wtc-ficha-nota {
+  margin: 6px 0;
+  color: #5a5e62;
+  font-size: 12px;
+}
+
+.wtc-ficha-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.wtc-btn {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #bcbec3;
+  border-radius: 10px;
+  background: #fff;
+  color: #303031;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wtc-btn.is-primario {
+  border-color: #1f9d55;
+  background: #1f9d55;
+  color: #fff;
+  font-weight: 600;
+}
+
+.wtc-btn:disabled,
+.wtc-enviar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wtc-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 10px 12px;
+  border: 1px solid #bcbec3;
+  border-radius: 10px;
+  background: #fff;
+  color: #111b21;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.wtc-form {
+  padding: 8px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rx-line, #d2d3d6);
+  background: var(--rx-surface, #fff);
+}
+
+.wtc-form-fila {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.wtc-enviar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #1f9d55;
+  color: #fff;
+  cursor: pointer;
+}

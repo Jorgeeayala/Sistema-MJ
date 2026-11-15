@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { useClientsData, useClientsMeta } from '../context/ClientsContext';
-import { compactHeader, findClaveMarangatuColumn } from '../utils';
+import { findClaveMarangatuColumn } from '../utils';
 import {
   DEFAULT_COLORS,
   DIAS_C,
@@ -16,7 +16,6 @@ import {
   sitioWeb,
   gs,
   lastDigit,
-  monthIndexFromSheet,
   normalizeConfig,
   parsePer,
   perLabel,
@@ -28,19 +27,13 @@ import {
   vencAuto,
   vencDe,
   diasRetraso,
-  ym,
 } from './ivaCore';
+import { findDvColumn, findWhatsappColumn, initialPeriodo } from './ivaPeriodo';
 import './iva.css';
 import { fijarSitioWeb } from '../estudio/sitioWeb';
 
 const IvaEditor = lazy(() => import('./IvaEditor'));
 
-// La hoja mensual de la planilla es el mes de los documentos: su IVA vence el
-// mes siguiente. (Hoja "Octubre" → período fiscal octubre, que vence en
-// noviembre.) Sin hoja elegida se abre el mes anterior al actual, que es el
-// que se está liquidando.
-const DESFASE_PERIODO_FISCAL = 0;
-const DESFASE_SIN_HOJA = -1;
 const REFRESH_MS = 60_000;
 
 const ESTADO_TAG = {
@@ -50,28 +43,11 @@ const ESTADO_TAG = {
   pres: ['pres', 'Presentado'],
 };
 
-function initialPeriodo(year, month) {
-  const idx = monthIndexFromSheet(month);
-  const yearInSheet = String(month || '').match(/\b(20\d{2})\b/);
-  const y = Number(yearInSheet ? yearInSheet[1] : year);
-  if (idx === null || !y) {
-    const now = new Date();
-    return ym(now.getFullYear(), now.getMonth() + DESFASE_SIN_HOJA);
-  }
-  return ym(y, idx + DESFASE_PERIODO_FISCAL);
-}
 
 function liqKey(ruc, periodo) {
   return ruc + '_' + periodo;
 }
 
-function findDvColumn(headers) {
-  return headers.find((h) => ['dv', 'digitoverificador', 'digito'].includes(compactHeader(h))) || null;
-}
-
-function findWhatsappColumn(headers) {
-  return headers.find((h) => /whats|celular|telef|movil/.test(compactHeader(h))) || null;
-}
 
 // initialRuc: cliente a abrir directamente (acceso desde su detalle). El
 // módulo se monta de nuevo cada vez que se entra a la pestaña.

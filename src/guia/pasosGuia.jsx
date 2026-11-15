@@ -6,7 +6,7 @@
 // Recuadro de consejo dentro de un paso (función simple, no componente).
 const tip = (contenido) => <div className="rx-tour-tip">{contenido}</div>;
 
-export function construirPasosGuia({ canAssign, isSuper }) {
+export function construirPasosGuia({ canAssign, isSuper, conAsistente = false }) {
   const pasos = [
     {
       id: 'bienvenida',
@@ -298,6 +298,10 @@ export function construirPasosGuia({ canAssign, isSuper }) {
           <p>Esta es la ficha que recibe el cliente, armada con los montos de la liquidación:</p>
           <ul>
             <li>Descargala en <strong>imagen o PDF</strong>, copiala o enviala por <strong>WhatsApp</strong>.</li>
+            <li>
+              Con Whaticket, <strong>Enviar por WhatsApp</strong> la manda <strong>al cliente</strong> (desde su chat,
+              dentro del sistema) o <strong>al grupo contable</strong>, y la marca como Enviado.
+            </li>
             <li><strong>Copiar a Marangatu</strong> completa el Formulario 120 con la extensión.</li>
             <li><strong>Descargar formularios</strong> baja los ya presentados.</li>
           </ul>
@@ -407,6 +411,25 @@ export function construirPasosGuia({ canAssign, isSuper }) {
         </>
       ),
     },
+    ...(conAsistente ? [{
+      id: 'asistente',
+      emoji: '✨',
+      title: 'El Asistente',
+      tab: 'clients',
+      target: '.rx-agente-button',
+      body: (
+        <>
+          <p>
+            Preguntale en tus palabras: <strong>«¿qué clientes míos faltan presentar?»</strong>,{' '}
+            <strong>«¿quiénes vencieron en IVA?»</strong> o <strong>«¿cómo registro la documentación?»</strong>.
+          </p>
+          <p>
+            Consulta la cartera y el IVA del período abierto y te explica cómo usar el sistema.{' '}
+            <strong>No modifica nada</strong> y nunca ve las claves de Marangatu.
+          </p>
+        </>
+      ),
+    }] : []),
     {
       id: 'sugerencias',
       emoji: '💡',
