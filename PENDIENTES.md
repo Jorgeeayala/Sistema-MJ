@@ -239,3 +239,17 @@ abre el chat sin recargar, pega texto e imagen y queda la vista previa.
 - [ ] Con WhatsApp Web cerrado: debe abrirse una sola pestaña y completar.
 - [ ] Si alguna vez vuelve a recargar la pestaña, WhatsApp cambió sus
   funciones internas: revisar los nombres de módulo en `operarWhatsapp`.
+
+## Asistente con IA y envío por Whaticket
+
+- [ ] Crear la clave en console.anthropic.com, cargar saldo y fijar un tope mensual de gasto.
+- [ ] Crear el token en Whaticket (Integraciones → Tokens) con los permisos del README.
+- [ ] Pegar `AppsScript-Agente.gs`, `AppsScript-Whaticket.gs` y la versión nueva de
+      `AppsScript-Avisos.gs`; cargar las Script Properties (ver README, "Asistente con IA
+      y envío de fichas por Whaticket").
+- [ ] Ejecutar `probarAsistente` y `probarWhaticket`, y publicar una **Nueva versión** del Web App.
+- [ ] Recompilar frontend y APK.
+- [ ] Mandar una ficha de prueba a un número propio (Al cliente) y al grupo contable;
+      confirmar en Whaticket que llegan la imagen y el texto como pie.
+- [ ] Probar el asistente con cada rol y revisar las hojas `Agente Uso` y `Whaticket Envíos`
+      la primera semana.

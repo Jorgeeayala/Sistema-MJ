@@ -382,6 +382,11 @@ function handleAvisosAction(action, body, sessionUser, sessionRole) {
   if (String(action).indexOf('libros') === 0 && typeof handleLibrosAction === 'function') {
     return handleLibrosAction(action, body, sessionUser, sessionRole);
   }
+  // Asistente con IA y envío de fichas por Whaticket (AppsScript-Agente.gs).
+  if ((String(action).indexOf('agente') === 0 || String(action).indexOf('whaticket') === 0) &&
+      typeof handleAgenteAction === 'function') {
+    return handleAgenteAction(action, body, sessionUser, sessionRole);
+  }
   const routes = {
     avisosCrear: [function () { return handleAvisosCrear(body, sessionUser); }, 'AVISOS_CREAR_ERROR'],
     avisosListar: [function () { return handleAvisosListar(sessionUser); }, 'AVISOS_LISTAR_ERROR'],

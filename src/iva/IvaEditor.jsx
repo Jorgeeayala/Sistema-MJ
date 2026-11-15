@@ -3,6 +3,8 @@ import { ArrowLeft, X } from 'lucide-react';
 import { api } from '../api';
 import { enviarContextoApp, enviarWhatsappExtension, mensajeDeError, sendIvaToMarangatu } from '../marangatu';
 import DescargaFormularios from './DescargaFormularios';
+import { blobABase64, useIntegraciones } from '../agente/integraciones';
+import ChatWhaticket from './ChatWhaticket';
 import {
   ESTADOS,
   casillasFormulario120,
@@ -39,6 +41,16 @@ import {
 
 const SAVE_DELAY_MS = 600;
 const WA_DESTINO_KEY = 'venc-iva-wa-destino';
+// Con Whaticket: a quién se manda la ficha ("cliente" o "grupo" contable).
+const WT_DESTINO_KEY = 'venc-iva-wt-destino';
+
+function readWtDestino() {
+  try {
+    return localStorage.getItem(WT_DESTINO_KEY) === 'grupo' ? 'grupo' : 'cliente';
+  } catch {
+    return 'cliente';
+  }
+}
 
 function readWaDestino() {
   try {
@@ -114,6 +126,11 @@ export default function IvaEditor({
   const [marangatuOpen, setMarangatuOpen] = useState(false);
   const [waDestino, setWaDestino] = useState(readWaDestino);
   const [descargaOpen, setDescargaOpen] = useState(false);
+  // null | 'cliente' (chat del cliente con la ficha) | 'grupo' (confirmación) | 'chat' (sólo ver el chat)
+  const [whaticketOpen, setWhaticketOpen] = useState(null);
+  const [wtDestinoElegido, setWtDestino] = useState(readWtDestino);
+  const integraciones = useIntegraciones();
+  const wtDestino = !wa.trim() ? 'grupo' : !integraciones.whaticket.grupo ? 'cliente' : wtDestinoElegido;
   const rootRef = useRef(null);
   const fichaRef = useRef(null);
 
@@ -653,7 +670,45 @@ export default function IvaEditor({
             >
               Copiar texto
             </button>
-            {wa.trim() && (
+            {integraciones.whaticket.activo ? (
+              (wa.trim() || integraciones.whaticket.grupo) && (
+                <span className="iva-wa-grupo">
+                  <button
+                    type="button"
+                    className="iva-btn iva-btn-wa"
+                    onClick={() => setWhaticketOpen(wtDestino)}
+                    title={wtDestino === 'grupo'
+                      ? 'Manda la ficha al grupo contable por Whaticket'
+                      : 'Abre el chat del cliente para mandarle la ficha por Whaticket'}
+                  >
+                    Enviar por WhatsApp
+                  </button>
+                  <select
+                    className="iva-wa-destino"
+                    value={wtDestino}
+                    onChange={(e) => {
+                      setWtDestino(e.target.value);
+                      try { localStorage.setItem(WT_DESTINO_KEY, e.target.value); } catch { /* preferencia opcional */ }
+                    }}
+                    aria-label="A quién se envía la ficha"
+                    title="A quién se envía la ficha"
+                  >
+                    {wa.trim() && <option value="cliente">Al cliente</option>}
+                    {integraciones.whaticket.grupo && <option value="grupo">Al grupo contable</option>}
+                  </select>
+                  {wa.trim() && (
+                    <button
+                      type="button"
+                      className="iva-btn"
+                      onClick={() => setWhaticketOpen('chat')}
+                      title="Ver la conversación con el cliente en Whaticket"
+                    >
+                      Ver chat
+                    </button>
+                  )}
+                </span>
+              )
+            ) : wa.trim() && (
               <span className="iva-wa-grupo">
                 <button type="button" className="iva-btn iva-btn-wa" onClick={() => enviarPorWhatsapp(fichaCtx)}>
                   Enviar por WhatsApp
@@ -682,6 +737,30 @@ export default function IvaEditor({
         <MarangatuModal ctx={fichaCtx} draft={draft} onClose={() => setMarangatuOpen(false)} toast={toast} />
       )}
       {descargaOpen && <DescargaFormularios ctx={fichaCtx} onClose={() => setDescargaOpen(false)} />}
+      {(whaticketOpen === 'cliente' || whaticketOpen === 'chat') && (
+        <ChatWhaticket
+          cliente={fichaCtx.cliente}
+          periodo={fichaCtx.periodo}
+          numero={waTelefono(fichaCtx.cliente)}
+          ficha={whaticketOpen === 'cliente' ? {
+            crearImagen: () => fichaBlob(fichaRef.current),
+            texto: waMensaje(fichaCtx, draft),
+            nombreArchivo: fileBase(fichaCtx) + '.png',
+          } : null}
+          onFichaEnviada={() => { markSent(); toast('Ficha enviada al cliente'); }}
+          onClose={() => setWhaticketOpen(null)}
+        />
+      )}
+      {whaticketOpen === 'grupo' && (
+        <WhaticketModal
+          ctx={fichaCtx}
+          texto={waMensaje(fichaCtx, draft)}
+          crearImagen={() => fichaBlob(fichaRef.current)}
+          nombreArchivo={fileBase(fichaCtx) + '.png'}
+          onClose={() => setWhaticketOpen(null)}
+          onSent={() => { markSent(); toast('Ficha enviada al grupo contable'); }}
+        />
+      )}
     </div>
   );
 }
@@ -831,6 +910,136 @@ function Ficha({ ref, model: m, firmaTxt }) {
       <div className="venc"><span>Vencimiento</span><b>{m.venc}</b></div>
       <div className="pie">{m.pie}</div>
       <div className="pie firma">{firmaTxt}</div>
+    </div>
+  );
+}
+
+// Confirmación antes de mandar la ficha al grupo contable por Whaticket. El
+// envío lo hace el servidor (Apps Script) con el token de Whaticket, que nunca
+// llega al navegador. La persona ve la imagen y el texto, y confirma. (Al
+// cliente se le manda desde su chat: ChatWhaticket.)
+function WhaticketModal({ ctx, texto: textoInicial, crearImagen, nombreArchivo, onClose, onSent }) {
+  const [texto, setTexto] = useState(textoInicial);
+  const [imagen, setImagen] = useState(null); // { blob, url }
+  const [status, setStatus] = useState('preparando'); // preparando | listo | enviando | enviado | error
+  const [error, setError] = useState('');
+  const [duplicado, setDuplicado] = useState(false);
+  // La imagen se arma una sola vez al abrir: la ficha no cambia mientras el
+  // diálogo está abierto (y la función llega nueva en cada render).
+  const crearImagenRef = useRef(crearImagen);
+
+  useEffect(() => {
+    let vivo = true;
+    let url = '';
+    crearImagenRef.current()
+      .then((blob) => {
+        if (!vivo) return;
+        url = URL.createObjectURL(blob);
+        setImagen({ blob, url });
+        setStatus('listo');
+      })
+      .catch(() => {
+        if (!vivo) return;
+        setError('No se pudo generar la imagen de la ficha.');
+        setStatus('error');
+      });
+    return () => {
+      vivo = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && status !== 'enviando') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, status]);
+
+  const enviar = async () => {
+    if (!imagen) return;
+    setStatus('enviando');
+    setError('');
+    try {
+      await api.whaticket.enviar({
+        destino: 'grupo',
+        texto: texto.trim(),
+        imagen: await blobABase64(imagen.blob),
+        nombreArchivo,
+        cliente: ctx.cliente.nombre,
+        ruc: ctx.cliente.ruc,
+        periodo: ctx.periodo,
+        forzar: duplicado,
+      });
+      setStatus('enviado');
+      onSent();
+    } catch (err) {
+      if (err.code === 'WHATICKET_DUPLICADO') {
+        setDuplicado(true);
+        setError(err.message + ' Si igual querés reenviarla, tocá «Reenviar igual».');
+      } else if (err.name === 'TransportError') {
+        setError('No se pudo confirmar el envío (sin respuesta del servidor). Revisá en Whaticket si el mensaje salió antes de reintentar.');
+      } else {
+        setError(err.message || 'No se pudo enviar por Whaticket.');
+      }
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="iva-modal-backdrop" onClick={status === 'enviando' ? undefined : onClose}>
+      <div className="iva-modal" role="dialog" aria-modal="true" aria-labelledby="iva-wt-title" onClick={(e) => e.stopPropagation()}>
+        <div className="iva-modal-head">
+          <div>
+            <h2 id="iva-wt-title">Enviar al grupo contable</h2>
+            <p className="sub">Ficha de {ctx.cliente.nombre}</p>
+            <p className="iva-ref">Sale desde el número del estudio por Whaticket. La ficha queda marcada como Enviado.</p>
+          </div>
+          <button type="button" className="iva-iconbtn" onClick={onClose} disabled={status === 'enviando'} aria-label="Cerrar"><X size={18} /></button>
+        </div>
+
+        <div className="iva-modal-body">
+          {status === 'enviado' ? (
+            <p>Listo: la ficha de <b>{ctx.cliente.nombre}</b> se envió al grupo contable.</p>
+          ) : (
+            <>
+              <div className="iva-wt-preview">
+                {imagen
+                  ? <img src={imagen.url} alt={'Ficha IVA de ' + ctx.cliente.nombre} />
+                  : <p className="hint">{status === 'preparando' ? 'Preparando la imagen…' : ''}</p>}
+              </div>
+              <label className="iva-wa" htmlFor="iva-wt-texto">Mensaje (va como pie de la imagen)</label>
+              <textarea
+                id="iva-wt-texto"
+                className="iva-wt-texto"
+                rows={4}
+                value={texto}
+                maxLength={4000}
+                onChange={(e) => setTexto(e.target.value)}
+                disabled={status === 'enviando'}
+              />
+              {error && <div className="iva-error iva-modal-alert" role="alert">{error}</div>}
+            </>
+          )}
+        </div>
+
+        <div className="iva-modal-foot">
+          {status === 'enviado' ? (
+            <button type="button" className="iva-btn primary" onClick={onClose}>Listo</button>
+          ) : (
+            <>
+              <button type="button" className="iva-btn" onClick={onClose} disabled={status === 'enviando'}>Cancelar</button>
+              <button
+                type="button"
+                className="iva-btn primary"
+                onClick={enviar}
+                disabled={!imagen || status === 'enviando' || status === 'preparando'}
+              >
+                {status === 'enviando' ? 'Enviando…' : duplicado ? 'Reenviar igual' : 'Enviar'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

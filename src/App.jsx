@@ -25,6 +25,9 @@ import useMediaQuery from './hooks/useMediaQuery';
 import useAvisos from './hooks/useAvisos';
 import BuzonPanel from './components/BuzonPanel';
 import SugerenciasPanel from './components/SugerenciasPanel';
+import { useIntegraciones } from './agente/integraciones';
+
+const AgentePanel = lazy(() => import('./agente/AgentePanel'));
 import useSugerencias from './hooks/useSugerencias';
 import useAmbiente from './hooks/useAmbiente';
 import { useSitioWeb } from './estudio/sitioWeb';
@@ -45,7 +48,7 @@ import {
 import { formatPeriodLabel } from './utils';
 import { api, onPrivateDataCleared } from './api';
 import { olvidarPlanilla } from './marcaciones/marcacionesStore';
-import { Calendar, User, Menu, X, UserCog, RefreshCw, Settings, Bell, HelpCircle, Lightbulb } from 'lucide-react';
+import { Calendar, User, Menu, X, UserCog, RefreshCw, Settings, Bell, HelpCircle, Lightbulb, Sparkles } from 'lucide-react';
 import './styles.css';
 import './ui-executive/recepcion-buzon.css';
 
@@ -133,6 +136,7 @@ export default function App({
   const [guiaOpen, setGuiaOpen] = useState(false);
   // Sugerencias para mejorar el sistema (ventana bajo el ícono de la barra).
   const [sugOpen, setSugOpen] = useState(false);
+  const [agenteOpen, setAgenteOpen] = useState(false);
   const sugButtonRef = useRef(null);
   const [initialScreenReady, setInitialScreenReady] = useState(false);
   const markInitialScreenReady = useCallback(() => setInitialScreenReady(true), []);
@@ -163,6 +167,9 @@ export default function App({
   const isAdminUser = userRole === 'SUPERUSUARIO' || userRole === 'ADMINISTRADOR';
   // Página web del estudio (configurable en Vencimientos IVA → Colores y feriados).
   const sitioWebEstudio = useSitioWeb(authenticated && !readOnlyPreview);
+  // Asistente con IA: el botón aparece si el backend tiene el módulo; a los
+  // administradores también cuando falta la clave, para ver cómo activarlo.
+  const integraciones = useIntegraciones(authenticated && !readOnlyPreview);
   // Ambientación por época (Navidad, estaciones…): la elige cada usuario.
   const ambienteSessionKey = `${user || ''}|${activeSessionToken}`;
   const ambientePref = useAmbiente(
@@ -261,6 +268,7 @@ export default function App({
     setIvaOpenRuc(null);
     setMobileMenuOpen(false);
     setBuzonOpen(false);
+    setAgenteOpen(false);
     setAvisoTarget(null);
   }, []);
 
@@ -645,6 +653,25 @@ export default function App({
         ? 'Nuevo cliente'
         : SECCIONES_SUG[assignClientsOpen ? 'assign' : mobileTab] || '';
   const cerrarSugerencias = useCallback(() => setSugOpen(false), []);
+  const cerrarAgente = useCallback(() => setAgenteOpen(false), []);
+  const agenteDisponible = authenticated && !readOnlyPreview && Boolean(year && month) &&
+    (integraciones.agente.activo || (isAdminUser && integraciones.cargado && integraciones.error !== 'SIN_MODULO'));
+  const renderAgenteButton = () => (
+    <button
+      type="button"
+      className="rx-bell-button rx-agente-button"
+      onClick={() => {
+        setMobileMenuOpen(false);
+        setBuzonOpen(false);
+        setSugOpen(false);
+        setAgenteOpen(true);
+      }}
+      title="Asistente (IA)"
+      aria-label="Abrir el asistente"
+    >
+      <Sparkles size={16} />
+    </button>
+  );
   const renderSugerenciasButton = () => {
     const nuevas = isAdminUser ? sugerencias.nuevas : 0;
     return (
@@ -715,8 +742,12 @@ export default function App({
     uiMode === 'executive' && authenticated && !mustChangePin && !readOnlyPreview && Boolean(year && month);
   const guiaKey = `ctc:guia-vista:v1:${user || ''}`;
   const pasosGuia = useMemo(
-    () => construirPasosGuia({ canAssign: canAssignClients, isSuper: userRole === 'SUPERUSUARIO' }),
-    [canAssignClients, userRole]
+    () => construirPasosGuia({
+      canAssign: canAssignClients,
+      isSuper: userRole === 'SUPERUSUARIO',
+      conAsistente: Boolean(integraciones.agente.activo),
+    }),
+    [canAssignClients, userRole, integraciones.agente.activo]
   );
   // La guía navega con una referencia estable para no reiniciar el paso.
   const tabChangeRef = useRef(handleMobileTabChange);
@@ -740,6 +771,7 @@ export default function App({
   }, []);
   const abrirGuia = useCallback(() => {
     setBuzonOpen(false);
+    setAgenteOpen(false);
     setSugOpen(false);
     setMobileMenuOpen(false);
     setGuiaOpen(true);
@@ -964,6 +996,7 @@ export default function App({
               </button>
             )}
             {!readOnlyPreview && renderBellButton('rx-bell-button')}
+            {agenteDisponible && renderAgenteButton()}
             {!readOnlyPreview && renderSugerenciasButton()}
             {guiaDisponible && (
               <button
@@ -1091,6 +1124,7 @@ export default function App({
             )}
 
             {user && !readOnlyPreview && renderBellButton('rx-bell-button')}
+            {agenteDisponible && renderAgenteButton()}
             {user && !readOnlyPreview && authenticated && renderSugerenciasButton()}
 
             {/* Píldora de usuario: visible siempre, en desktop y mobile,
@@ -1320,6 +1354,11 @@ export default function App({
           mobileTab={mobileTab}
           onMobileTabChange={handleMobileTabChange}
         />
+        {agenteDisponible && (
+          <Suspense fallback={null}>
+            <AgentePanel key={user || ''} open={agenteOpen} onClose={cerrarAgente} />
+          </Suspense>
+        )}
       </ClientsProvider>
 
       {uiMode === 'executive' && !isMobilePeriodNav && authenticated && year && month &&

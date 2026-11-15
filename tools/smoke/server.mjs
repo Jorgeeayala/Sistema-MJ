@@ -130,6 +130,56 @@ const libros = [];
 const preferencias = new Map();
 const AMBIENTES_OK = ['ninguna', 'automatica', 'navidad', 'anio-nuevo', 'semana-santa', 'independencia', 'san-juan', 'verano', 'otono', 'invierno', 'primavera'];
 const pinturas = []; // filas pintadas por recepcionPintarFila
+// Asistente (AppsScript-Agente.gs): pedidos recibidos y envíos por Whaticket.
+const agentePedidos = [];
+const whaticketEnvios = [];
+// Chats simulados por número. El primer cliente de la planilla mj (595981100000)
+// tiene una conversación reciente; los demás no tienen chat.
+const whaticketChats = new Map([[
+  '595981100000',
+  {
+    nombre: 'Comercial Sur 1',
+    ultimoRecibido: new Date(Date.now() - 3600_000).toISOString(),
+    mensajes: [
+      { id: 'h1', texto: 'Buen día, ¿ya está la liquidación de octubre?', deMi: false, tipo: '', mediaUrl: '', ack: null, fecha: new Date(Date.now() - 7200_000).toISOString() },
+      { id: 'h2', texto: '*María:*\nHola! Hoy te la mandamos.', deMi: true, tipo: '', mediaUrl: '', ack: 3, fecha: new Date(Date.now() - 5400_000).toISOString() },
+      { id: 'h3', texto: 'Perfecto, gracias', deMi: false, tipo: '', mediaUrl: '', ack: null, fecha: new Date(Date.now() - 3600_000).toISOString() },
+    ],
+  },
+]]);
+
+// "IA" simulada: imita el contrato de la API de Claude con herramientas. Con
+// una pregunta nueva pide una herramienta según palabras clave; con los
+// resultados de la herramienta responde un texto que los resume.
+function agenteSimulado(messages) {
+  const ultimo = messages[messages.length - 1];
+  if (Array.isArray(ultimo.content) && ultimo.content.some((b) => b.type === 'tool_result')) {
+    const partes = ultimo.content.map((b) => {
+      let data = {};
+      try { data = JSON.parse(b.content); } catch { /* texto */ }
+      if (data.error) return 'No pude: ' + data.error;
+      if (data.total_clientes !== undefined) return `**Resumen de ${data.hoja}**\n- Clientes: ${data.total_clientes}\n- Presentados: ${data.presentados}\n- Pendientes: ${data.pendientes}\n- Avance: ${data.avance_pct} %`;
+      if (data.totales_del_periodo) return `IVA ${data.periodo_fiscal}: ${data.encontrados} clientes coinciden.\n` + (data.clientes || []).slice(0, 3).map((c) => `- ${c.cliente}: ${c.estado}, vence ${c.vence}${c.dias_retraso ? ` (**${c.dias_retraso} días de retraso**)` : ''}`).join('\n');
+      if (data.clientes) return `Encontré **${data.encontrados}** clientes:\n` + data.clientes.slice(0, 5).map((c) => `- ${c.cliente} (vence día ${c.vence_dia})`).join('\n');
+      if (data.columnas) return `Ficha de **${data.cliente}**: ` + Object.keys(data.columnas).join(', ');
+      return JSON.stringify(data).slice(0, 300);
+    });
+    return { stop_reason: 'end_turn', content: [{ type: 'text', text: partes.join('\n\n') }] };
+  }
+  const q = String(ultimo.content || '').toLowerCase();
+  const usar = (name, input) => ({
+    stop_reason: 'tool_use',
+    content: [
+      { type: 'text', text: 'Dejame revisar.' },
+      { type: 'tool_use', id: 'toolu_' + Math.random().toString(36).slice(2), name, input },
+    ],
+  });
+  if (/iva|vencid/.test(q)) return usar('estado_iva', { estado: 'no_presentado', limite: 10 });
+  if (/c[oó]mo viene|mes/.test(q)) return usar('resumen_periodo', {});
+  if (/m[ií]os|mis /.test(q)) return usar('buscar_clientes', { encargado: 'yo', estado: 'pendiente' });
+  if (/ficha|datos de/.test(q)) return usar('ver_cliente', { cliente: q.replace(/.*(ficha|datos) de\s*/, '') });
+  return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Para registrar la documentación abrí la ficha del cliente, marcá **Ventas** y **Compras** y tocá **Registrar recepción**.' }] };
+}
 const MOCK_COLORES_IVA = { 0: '#ffff99', 1: '#cc99ff', 2: '#4285f4', 3: '#ffcc99', 4: '#ccecff', 5: '#ffff99', 6: '#b6d7a8', 7: '#ffccff', 8: '#cde9de', 9: '#8e7cc3' };
 const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
@@ -457,6 +507,54 @@ export async function handle(body) {
     }
     case 'smokePinturas':
       return { ok: true, pinturas };
+    case 'agenteEstado':
+      return {
+        ok: true,
+        agente: { activo: process.env.AGENTE_ACTIVO !== '0', modelo: 'simulado', limiteDiario: 200, usadasHoy: agentePedidos.length },
+        whaticket: { activo: process.env.WHATICKET_ACTIVO !== '0', grupo: process.env.WHATICKET_GRUPO !== '0' },
+      };
+    case 'agenteMensaje': {
+      agentePedidos.push({ system: body.system, tools: body.tools, messages: body.messages });
+      if (!Array.isArray(body.messages) || !body.messages.length) {
+        return { ok: false, code: 'AGENTE_ERROR', error: 'Conversación inválida' };
+      }
+      const r = agenteSimulado(body.messages);
+      return { ok: true, ...r, usage: { input_tokens: 100, output_tokens: 20 } };
+    }
+    case 'whaticketEnviar': {
+      const destino = body.destino === 'grupo' ? 'grupo' : 'cliente';
+      const numero = String(body.numero || '').replace(/\D/g, '');
+      if (destino === 'cliente' && numero.length < 10) return { ok: false, code: 'WHATICKET_NUMERO', error: 'El número de WhatsApp del cliente no es válido.' };
+      const clave = destino + (numero || 'grupo');
+      const reciente = whaticketEnvios.find((e) => e.clave === clave && e.periodo === body.periodo && e.ruc === body.ruc && Date.now() - e.t < 90_000);
+      if (reciente && !body.forzar) {
+        return { ok: false, code: 'WHATICKET_DUPLICADO', error: 'Esta ficha se acaba de enviar a ese ' + (destino === 'grupo' ? 'grupo.' : 'número.') };
+      }
+      whaticketEnvios.push({ t: Date.now(), clave, destino, numero, periodo: body.periodo, ruc: body.ruc, texto: body.texto, imagenBytes: String(body.imagen || '').length, user: session.user });
+      if (destino === 'cliente') {
+        const chat = whaticketChats.get(numero) || { mensajes: [], ultimoRecibido: '' };
+        chat.mensajes.push({ id: 'm' + Date.now(), texto: body.texto, deMi: true, tipo: 'image', mediaUrl: 'data:image/png;base64,' + String(body.imagen || ''), ack: 1, fecha: new Date().toISOString() });
+        whaticketChats.set(numero, chat);
+      }
+      return { ok: true, enviado: true, destino, via: destino === 'grupo' ? 'grupo' : (whaticketChats.get(numero)?.ultimoRecibido ? 'chat' : 'nuevo') };
+    }
+    case 'whaticketChat': {
+      const numero = String(body.numero || '').replace(/\D/g, '');
+      const chat = whaticketChats.get(numero);
+      if (!chat) return { ok: true, ticket: null, mensajes: [], hayMasAntes: false };
+      const abierta = Boolean(chat.ultimoRecibido) && Date.now() - new Date(chat.ultimoRecibido).getTime() < 7 * 86400000;
+      return { ok: true, ticket: { id: 't-' + numero, estado: 'open', nombre: chat.nombre || '', numero, foto: '', ventanaAbierta: abierta, ultimoRecibido: chat.ultimoRecibido }, mensajes: chat.mensajes.slice(-20), hayMasAntes: false, cursor: null };
+    }
+    case 'whaticketResponder': {
+      const numero = String(body.numero || '').replace(/\D/g, '');
+      const chat = whaticketChats.get(numero);
+      if (!chat) return { ok: false, code: 'WHATICKET_SIN_CHAT', error: 'Este cliente todavía no tiene chat en Whaticket.' };
+      chat.mensajes.push({ id: 'r' + Date.now(), texto: '*' + session.user + ':*\n' + body.texto, deMi: true, tipo: '', mediaUrl: '', ack: 1, fecha: new Date().toISOString() });
+      return { ok: true };
+    }
+    // Sólo para pruebas: lo que recibió el asistente y lo que se envió por Whaticket.
+    case 'smokeAgente':
+      return { ok: true, pedidos: agentePedidos, envios: whaticketEnvios };
     // Sólo para pruebas: deja un aviso para un usuario sin pasar por la ficha.
     case 'smokeSembrarAviso': {
       const id = `av-${Math.random().toString(36).slice(2)}`;
