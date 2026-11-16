@@ -44,7 +44,7 @@ original.
 | CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
-| CAMBIO-14 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 | En prueba (falta backend CDC) | No |
+| CAMBIO-15 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 | En prueba (falta backend CDC) | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -285,7 +285,7 @@ Archivos: `AppsScript-Libros.gs` (nuevo), `AppsScript-Avisos.gs`,
 `src/components/DesktopSidebar.jsx`, `src/components/MobileTabBar.jsx`,
 `src/guia/pasosGuia.jsx`, `tools/smoke/server.mjs`.
 
-### CAMBIO-14 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
+### CAMBIO-15 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
 
 Unificación con el commit `dd191c3` de `Jorgeeayala/Sistema-MJ`
 («Actualizacion De Version Modulo XML/KUDE»), aplicado sobre CAMBIO-13.
@@ -297,9 +297,10 @@ era este commit.
   Oficio.
 - Configuración → «Lotes XML (CDC)»: registrar los lotes de CDC que la
   extensión junta en Marangatu / eKuatia.
-- Extensión **2.15** (2.12 de acá + 2.14 de Jorge): recolector de CDC en
-  Marangatu y eKuatia, y descarga directa de XML (usa un servicio de captcha
-  con clave propia, ver el popup). Acepta las tres apps:
+- Extensión **2.15** (2.13 de acá con el ícono MJ y la ventana nueva + 2.14 de
+  Jorge): recolector de CDC en Marangatu y eKuatia, y descarga directa de XML
+  (usa un servicio de captcha con clave propia: pestaña **Descargas** de la
+  ventana de la extensión). Acepta las tres apps:
   `control-total-clientes`, `control-total-clientes-iva` y `sistema-mj`.
 - Dependencias nuevas: `qrcode`, Tailwind 4 (sólo para `src/xml/xml.css`,
   sin preflight) y TypeScript. Hace falta `npm install`.

@@ -284,6 +284,15 @@ automático (la extensión no puede actuar sobre otros programas).
 > realizar el acceso manual, y **Copiar lista** deja las casillas en el
 > portapapeles para cargarlas a mano.
 
+## Ventana del ícono (v2.13)
+
+Ícono nuevo: el emblema MJ (sin texto) en 16/32/48/128 px (`icono-*.png`).
+La ventana tiene encabezado con el logo y un indicador «En Marangatu /
+Fuera de Marangatu», y tres pestañas: **Inicio** (Formulario 120 y página
+actual), **Descargas** (formularios IVA) y **Herramientas** (relevamientos,
+plegados). Claro y oscuro según el sistema. Los IDs de los controles no
+cambiaron: `popupUi.js` sólo maneja las pestañas, el indicador y la versión.
+
 ## Simulador del flujo (pruebas)
 
 `pruebas/extension-sim/flujo-iva.mjs` carga esta extensión en Chromium contra
