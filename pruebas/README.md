@@ -303,8 +303,8 @@ era este commit.
   `control-total-clientes`, `control-total-clientes-iva` y `sistema-mj`.
 - Dependencias nuevas: `qrcode`, Tailwind 4 (sólo para `src/xml/xml.css`,
   sin preflight) y TypeScript. Hace falta `npm install`.
-- Las notas de instalación originales de Jorge y `factura-prueba.xml` quedaron
-  en `pruebas/xml-kude/`.
+- XML de ejemplo para probar el KuDE: `pruebas/xml-kude/factura-prueba.xml`
+  (factura de ₲ 131.000).
 
 **Pendiente:** el backend de los lotes (`AppsScript-CdcLotes.gs`, acciones
 `cdcCrearLote`, `cdcListarLotes`, `cdcObtenerItems`, `cdcObtenerXml`,
