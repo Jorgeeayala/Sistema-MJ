@@ -24,6 +24,10 @@
   #resultado:empty { display: none; }
   label { display: block; margin-top: 8px; font-weight: 600; }
   label input, label select { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 6px 8px; font: inherit; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+  /* La lista desplegable nativa se pinta blanca en Windows: sin esto, en
+     modo oscuro las opciones no seleccionadas quedan blancas sobre blanco. */
+  select option { color: #111827; background-color: #ffffff; }
+  .historial { white-space: pre-line; font: 11px/1.5 ui-monospace, Consolas, monospace; margin-top: 6px; }
   .fila { display: flex; gap: 8px; }
   .fila > label { flex: 1; }
   progress { width: 100%; height: 8px; margin-top: 6px; }
@@ -96,6 +100,31 @@
   </section>
 
   <section>
+    <h2>Descarga directa de XML (eKuatia)</h2>
+    <p class="muted">Clave del servicio de captcha para bajar XML desde Control Clientes sin el worker. Se guarda solo en esta extensión.</p>
+    <label>Clave del servicio
+      <input id="dirClave" type="password" autocomplete="off" placeholder="Pegá la clave">
+    </label>
+    <button id="dirGuardar" class="primary">Guardar clave</button>
+    <div id="dirEstado" class="muted">Sin clave configurada.</div>
+    <label>Ritmo de descarga (para medir tiempos)
+      <select id="dirPerfil">
+        <option value="actual">Actual: 1 token a la vez · pausa 2 s</option>
+        <option value="prudente">Prudente rápido: 3 tokens en vuelo · pausa 2 s</option>
+        <option value="rapido">Rápido: 6 tokens en vuelo · pausa 0,5 s</option>
+        <option value="fondo">A fondo: todos los tokens · sin pausa</option>
+      </select>
+    </label>
+    <div id="dirPerfilEstado" class="muted"></div>
+    <div id="dirUltimaCorrida" class="muted">Sin corridas registradas en esta sesión del navegador.</div>
+    <p class="muted" style="margin-top:10px"><b>Bitácora de mediciones</b> (últimas 20 corridas; queda guardada en esta PC aunque cierres Chrome):</p>
+    <div id="dirHistorial" class="historial muted">Bitácora vacía.</div>
+    <button id="dirCopiarHistorial">Copiar resumen de mediciones</button>
+    <button id="dirBorrarHistorial">Borrar bitácora</button>
+    <div id="dirHistorialEstado" class="muted"></div>
+  </section>
+
+  <section>
     <h2>Relevamiento</h2>
     <p class="muted">Abrí el Formulario 120 en Marangatu (sin datos de clientes) y generá el listado de campos para configurar la carga automática. No incluye valores ni contraseñas.</p>
     <button id="relevar">Relevar formulario</button>
@@ -109,6 +138,7 @@
   <script src="paginas.js"></script>
   <script src="popup.js"></script>
   <script src="popupDescarga.js"></script>
+  <script src="popupDirecta.js"></script>
   <script src="popupRelevamiento.js"></script>
   <script src="popupPagina.js"></script>
 </body>

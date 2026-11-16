@@ -44,6 +44,7 @@ original.
 | CAMBIO-7 | Extensión 2.12: flujo del Formulario 120 (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
+| CAMBIO-14 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 | En prueba (falta backend CDC) | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -283,6 +284,41 @@ Archivos: `AppsScript-Libros.gs` (nuevo), `AppsScript-Avisos.gs`,
 `src/libros/` (nuevo), `src/api.js`, `src/App.jsx`,
 `src/components/DesktopSidebar.jsx`, `src/components/MobileTabBar.jsx`,
 `src/guia/pasosGuia.jsx`, `tools/smoke/server.mjs`.
+
+### CAMBIO-14 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
+
+Unificación con el commit `dd191c3` de `Jorgeeayala/Sistema-MJ`
+(«Actualizacion De Version Modulo XML/KUDE»), aplicado sobre CAMBIO-13.
+Esa copia partía de CAMBIO-1 + lo traído en CAMBIO-5, así que lo único nuevo
+era este commit.
+
+- Pestaña «XML / KuDE» (junto a «Libros IVA»): cargar XML SIFEN, ver el KuDE
+  e imprimirlo; «Imprimir todo» empaqueta de a 2 facturas cortas por hoja
+  Oficio.
+- Configuración → «Lotes XML (CDC)»: registrar los lotes de CDC que la
+  extensión junta en Marangatu / eKuatia.
+- Extensión **2.15** (2.12 de acá + 2.14 de Jorge): recolector de CDC en
+  Marangatu y eKuatia, y descarga directa de XML (usa un servicio de captcha
+  con clave propia, ver el popup). Acepta las tres apps:
+  `control-total-clientes`, `control-total-clientes-iva` y `sistema-mj`.
+- Dependencias nuevas: `qrcode`, Tailwind 4 (sólo para `src/xml/xml.css`,
+  sin preflight) y TypeScript. Hace falta `npm install`.
+- Las notas de instalación originales de Jorge y `factura-prueba.xml` quedaron
+  en `pruebas/xml-kude/`.
+
+**Pendiente:** el backend de los lotes (`AppsScript-CdcLotes.gs`, acciones
+`cdcCrearLote`, `cdcListarLotes`, `cdcObtenerItems`, `cdcObtenerXml`,
+`cdcSubirXml`, `cdcReintentarFallidos`, `cdcBorrarLote`) **no está en el
+repositorio de Jorge**. Hasta sumarlo, «Lotes XML (CDC)» y lo que trae XML
+desde Drive dan error; cargar XML a mano e imprimir el KuDE funcionan igual.
+Tampoco se agregó todavía la pestaña XML a la guía interactiva
+(`src/guia/pasosGuia.jsx`).
+
+Archivos: `src/xml/` y `src/cdc/` (nuevos), `tsconfig.json`, `package.json`,
+`package-lock.json`, `vite.config.js`, `src/App.jsx`, `src/api.js`,
+`src/marangatu.js`, `src/styles.css`, `src/components/DesktopSidebar.jsx`,
+`src/components/MobileTabBar.jsx`, `src/components/SettingsDialog.jsx`,
+`Extension/` (manifest, background, popup y 10 archivos nuevos).
 
 ## Las tres piezas separadas
 

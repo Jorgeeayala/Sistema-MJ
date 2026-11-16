@@ -279,7 +279,8 @@ async function iniciarDescarga(msg, { tabId = null, user = '', pass = '' } = {})
     const j = await leerJob();
     if (!j || j.id !== job.id) return;
     // Estricto: la sesión no la abrió la extensión con la clave del cliente.
-    j.estricto = !user || !!(r && r.sesionActiva);
+    // (Si la sesión que se mantuvo es la del mismo cliente, no es estricto.)
+    j.estricto = !user || !!(r && r.sesionActiva && !r.mismoCliente);
     j.tabLista = id;
     await guardarJob(j);
     arrancarCuandoEntre(id, j.id);
@@ -472,7 +473,11 @@ chrome.runtime.onConnectExternal.addListener((port) => {
     return;
   }
   puertosApp.add(port);
-  port.onDisconnect.addListener(() => puertosApp.delete(port));
+  // Ídem: la app puede cerrar el canal al cambiar de página (sin error real).
+  port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError;
+    puertosApp.delete(port);
+  });
   estadoActual().then((estado) => {
     try { port.postMessage({ tipo: 'estado', estado }); } catch { puertosApp.delete(port); }
   });

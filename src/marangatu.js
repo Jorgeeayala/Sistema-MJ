@@ -79,6 +79,7 @@ export function sendIvaToMarangatu({ ruc, nombre, periodo, casillas, control = [
 
 // Texto para mostrar de los errores que devuelve la extensión.
 export function mensajeDeError(error) {
+  if (error === 'FALTA_CLAVE_DIRECTA') return 'Falta configurar la clave del servicio de captcha en la extensión (ícono de Ekuatia Login → «Descarga directa de XML»).';
   if (error === 'TAREA_EN_CURSO') return 'Hay una tarea en curso en Marangatu. Cancelala o esperá a que termine.';
   if (error === 'DESCARGA_EN_CURSO') return 'Ya hay una descarga en curso.';
   if (error === 'WA_TELEFONO') return 'El número de WhatsApp del cliente no es válido. Revisalo en la ficha.';
@@ -107,6 +108,54 @@ function enviarAExtension(mensaje) {
 // ¿Está instalada y alcanzable? Resuelve { ok, version, descarga } o { ok: false }.
 export function pingExtension() {
   return enviarAExtension({ action: 'APP_PING' });
+}
+
+// Lotes CDC creados por el recolector de Marangatu que todavía no se
+// registraron en el backend. Resuelve { ok, lotes } o { ok: false, error }.
+export function obtenerLotesCdcPendientes() {
+  return enviarAExtension({ action: 'APP_CDC_LOTES_PENDIENTES' });
+}
+
+// Confirma a la extensión que un lote local ya quedó registrado, para que
+// lo saque de su lista de pendientes.
+export function confirmarLoteCdcSincronizado(localId, loteServidorId) {
+  return enviarAExtension({ action: 'APP_CDC_LOTE_CONFIRMADO', localId, loteServidorId });
+}
+
+// ---------------------------------------------------------------------------
+// Descarga directa de XML por la extensión (sin worker ni Drive): la app
+// manda los CDCs, la extensión los baja de eKuatia por API y devuelve los
+// XML. El trabajo corre en la extensión: acá se pide, se consulta el avance
+// y al final se retiran los resultados.
+// ---------------------------------------------------------------------------
+
+export function descargarDirectoPedir(cdcs) {
+  return enviarAExtension({ action: 'APP_CDC_DIR_DESCARGAR', cdcs });
+}
+
+export function descargarDirectoEstado() {
+  return enviarAExtension({ action: 'APP_CDC_DIR_ESTADO' });
+}
+
+export function descargarDirectoResultados() {
+  return enviarAExtension({ action: 'APP_CDC_DIR_RESULTADOS' });
+}
+
+// Trae los lotes pendientes de la extensión, los registra con `registrar`
+// (api.cdc.crearLote) y confirma cada uno. Si algo falla a mitad de camino,
+// ese lote queda pendiente para el próximo intento (el backend además es
+// idempotente por loteLocalId). Resuelve { ok, sincronizados, error? }.
+export async function sincronizarLotesCdc(registrar) {
+  const r = await obtenerLotesCdcPendientes();
+  if (!r?.ok) return { ok: false, sincronizados: 0, error: r?.error || 'NO_EXTENSION' };
+  let sincronizados = 0;
+  for (const lote of r.lotes || []) {
+    const registrado = await registrar(lote);
+    if (!registrado?.loteId) return { ok: false, sincronizados, error: 'El backend no devolvió el lote registrado.' };
+    await confirmarLoteCdcSincronizado(lote.id, registrado.loteId);
+    sincronizados += 1;
+  }
+  return { ok: true, sincronizados };
 }
 
 // Pide bajar los formularios de IVA de un cliente. Con `periodos` (AAAA-MM) o
