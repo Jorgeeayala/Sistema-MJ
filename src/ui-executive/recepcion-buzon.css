@@ -773,3 +773,624 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ── Guía interactiva del sistema ─────────────────────────────────── */
+.rx-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.rx-tour-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 18, 0.62);
+}
+
+.rx-tour-spot {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 4px rgba(111, 165, 195, 0.9), 0 0 0 9999px rgba(10, 14, 18, 0.62);
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  pointer-events: none;
+}
+
+.rx-tour-blocker {
+  position: fixed;
+  inset: 0;
+}
+
+.rx-tour-card {
+  position: fixed;
+  box-sizing: border-box;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  outline: none;
+  animation: rx-tour-in 0.22s ease;
+}
+
+@keyframes rx-tour-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-tour-card { animation: none; }
+  .rx-tour-spot { transition: none; }
+}
+
+.rx-tour-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rx-tour-count {
+  color: var(--rx-brand, #27658d);
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rx-tour-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  margin-right: -8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--rx-muted, #5a5e62);
+  cursor: pointer;
+}
+
+.rx-tour-close:hover {
+  background: var(--rx-soft, #f4f5f6);
+}
+
+.rx-tour-emoji {
+  font-size: 34px;
+  line-height: 1;
+  margin: 2px 0 6px;
+}
+
+.rx-tour-card h2 {
+  margin: 4px 0 8px;
+  font-size: var(--rx-fs-xl, 19px);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.rx-tour-body {
+  color: var(--rx-ink, #303031);
+  font-size: var(--rx-fs-sm, 14px);
+  line-height: 1.55;
+}
+
+.rx-tour-body p {
+  margin: 0 0 8px;
+}
+
+.rx-tour-body ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.rx-tour-body li {
+  margin-bottom: 4px;
+}
+
+.rx-tour-body strong {
+  color: var(--rx-ink, #303031);
+}
+
+.rx-tour-tip {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--rx-brand-soft, #e7f0f5);
+  font-size: var(--rx-fs-xs, 13px);
+}
+
+.rx-tour-progress {
+  height: 4px;
+  margin: 12px 0 14px;
+  border-radius: 999px;
+  background: var(--rx-soft, #f4f5f6);
+  overflow: hidden;
+}
+
+.rx-tour-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--rx-brand, #27658d);
+  transition: width 0.25s ease;
+}
+
+.rx-tour-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.rx-tour-btn,
+.rx-tour-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rx-tour-btn {
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+}
+
+.rx-tour-btn-primary {
+  border-color: var(--rx-brand, #27658d);
+  background: var(--rx-brand, #27658d);
+  color: #fff;
+}
+
+[data-theme="dark"] .rx-tour-btn-primary {
+  color: #12212b;
+}
+
+.rx-tour-link {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--rx-muted, #5a5e62);
+}
+
+/* Botón "Guía" de la barra superior */
+.rx-help-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #d2d3d6;
+  cursor: pointer;
+}
+
+.rx-help-button:hover {
+  border-color: rgba(111, 165, 195, 0.35);
+  color: #ffffff;
+}
+
+.app-navbar .rx-help-button {
+  border-color: var(--border-light, #d2d3d6);
+  background: transparent;
+  color: inherit;
+}
+
+/* ── Sugerencias (ventana bajo la lamparita) ──────────────────────── */
+.rx-sug-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 20, 25, 0.18);
+}
+
+.rx-sug-panel {
+  position: fixed;
+  z-index: 1201;
+  max-height: min(640px, calc(100vh - 80px));
+  max-height: min(640px, calc(100dvh - 80px));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: 1px solid var(--rx-line, #d2d3d6);
+  border-radius: 16px;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.rx-sug-panel:focus {
+  outline: none;
+}
+
+.rx-sug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 0 18px;
+}
+
+.rx-sug-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--rx-fs-xl, 18px);
+  font-weight: 800;
+}
+
+.rx-sug-head h2 svg {
+  color: var(--rx-amber, #bf7416);
+}
+
+.rx-sug-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 14px 0;
+  border-bottom: 1px solid var(--rx-line, #d2d3d6);
+}
+
+.rx-sug-tab {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--rx-muted, #5a5e62);
+  font: inherit;
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rx-sug-tab.is-active {
+  border-bottom-color: var(--rx-brand, #27658d);
+  color: var(--rx-ink, #303031);
+}
+
+.rx-sug-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rx-sug-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 18px;
+}
+
+.rx-sug-label {
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+}
+
+.rx-sug-tipos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rx-sug-tipo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  border-radius: 12px;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  font: inherit;
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rx-sug-tipo-btn:hover {
+  border-color: var(--rx-brand, #27658d);
+}
+
+.rx-sug-tipo-btn.is-active {
+  border-color: var(--rx-brand, #27658d);
+  background: var(--rx-brand-soft, #e7f0f5);
+  box-shadow: inset 0 0 0 1px var(--rx-brand, #27658d);
+}
+
+.rx-sug-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 10px 12px;
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  border-radius: 12px;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  font: inherit;
+  font-size: var(--rx-fs-md, 15px);
+  resize: vertical;
+}
+
+.rx-sug-textarea:focus {
+  outline: 2px solid var(--rx-brand, #27658d);
+  outline-offset: 1px;
+}
+
+.rx-sug-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--rx-subtle, #737c85);
+  font-size: var(--rx-fs-2xs, 12px);
+}
+
+.rx-sug-error {
+  margin: 0 18px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--rx-red-soft, #fff0ed);
+  color: var(--rx-red, #d05b55);
+  font-size: var(--rx-fs-sm, 14px);
+}
+
+.rx-sug-form .rx-sug-error {
+  margin: 0;
+}
+
+.rx-sug-enviar {
+  margin-top: 4px;
+}
+
+.rx-sug-gracias {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--rx-muted, #5a5e62);
+}
+
+.rx-sug-gracias svg {
+  color: var(--rx-green, #15906f);
+}
+
+.rx-sug-gracias strong {
+  color: var(--rx-ink, #303031);
+  font-size: var(--rx-fs-lg, 16px);
+}
+
+.rx-sug-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 18px 8px;
+}
+
+.rx-sug-filtros .rx-buzon-chip {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.rx-sug-select {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  border-radius: 999px;
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+  font: inherit;
+  font-size: var(--rx-fs-sm, 14px);
+}
+
+.rx-sug-lista {
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+}
+
+.rx-sug-vacio {
+  padding: 24px 18px;
+  color: var(--rx-muted, #5a5e62);
+  text-align: center;
+  font-size: var(--rx-fs-sm, 14px);
+}
+
+.rx-sug-item {
+  padding: 12px 18px;
+  border-top: 1px solid var(--rx-line, #d2d3d6);
+}
+
+.rx-sug-item.is-nueva {
+  background: var(--rx-brand-soft, #e7f0f5);
+}
+
+.rx-sug-item-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rx-sug-autor {
+  font-size: var(--rx-fs-md, 15px);
+}
+
+.rx-sug-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--rx-soft, #f4f5f6);
+  color: var(--rx-muted, #5a5e62);
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 700;
+}
+
+.rx-sug-tipo.is-fallo {
+  background: var(--rx-red-soft, #fff0ed);
+  color: var(--rx-red, #d05b55);
+}
+
+.rx-sug-tipo.is-recomendacion {
+  background: var(--rx-amber-soft, #fff3df);
+  color: var(--rx-amber, #bf7416);
+}
+
+.rx-sug-tipo.is-consejo {
+  background: var(--rx-green-soft, #e6f6f0);
+  color: var(--rx-green, #15906f);
+}
+
+.rx-sug-nueva {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--rx-brand, #27658d);
+  color: #fff;
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 800;
+}
+
+[data-theme="dark"] .rx-sug-nueva {
+  color: #12212b;
+}
+
+.rx-sug-fecha {
+  margin-top: 4px;
+  color: var(--rx-subtle, #737c85);
+  font-size: var(--rx-fs-2xs, 12px);
+}
+
+.rx-sug-texto {
+  margin: 6px 0 0;
+  font-size: var(--rx-fs-sm, 14px);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rx-sug-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rx-sug-item-actions .rx-buzon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+}
+
+.rx-sug-resolver {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  background: var(--rx-surface, #fff);
+  color: var(--rx-ink, #303031);
+}
+
+.rx-sug-resolver:hover {
+  border-color: var(--rx-green, #15906f);
+  color: var(--rx-green, #15906f);
+}
+
+.rx-sug-resuelta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--rx-green, #15906f);
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+}
+
+.rx-sug-estado {
+  margin-left: auto;
+  color: var(--rx-subtle, #737c85);
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 700;
+}
+
+.rx-sug-estado.is-vista {
+  color: var(--rx-brand, #27658d);
+}
+
+.rx-sug-estado.is-resuelta {
+  color: var(--rx-green, #15906f);
+}
+
+.rx-tour-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  color: var(--rx-muted, #5a5e62);
+  font-size: var(--rx-fs-sm, 14px);
+}
+
+.rx-tour-loading-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--rx-brand, #27658d);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: rx-tour-giro 0.8s linear infinite;
+}
+
+@keyframes rx-tour-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Guía en el celular: tarjeta compacta abajo (no tapa lo iluminado) con
+   los botones siempre a la vista. */
+@media (max-width: 559px) {
+  .rx-tour-card {
+    max-height: 48vh;
+    max-height: 48dvh;
+    padding-top: 12px;
+    padding-bottom: 0;
+  }
+  .rx-tour-emoji {
+    float: left;
+    margin: 0 8px 0 0;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .rx-tour-card h2 {
+    font-size: var(--rx-fs-lg, 16px);
+  }
+  .rx-tour-body {
+    clear: both;
+    font-size: var(--rx-fs-sm, 14px);
+  }
+  .rx-tour-actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: 6px;
+    padding: 8px 0 12px;
+    background: var(--rx-surface, #fff);
+  }
+}
+
+html.rx-tour-on body {
+  padding-bottom: 70vh;
+}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -13,6 +13,7 @@ const ClientDetail = lazy(() => import('./screens/ClientDetail'));
 const NewClient = lazy(() => import('./screens/NewClient'));
 const AssignClients = lazy(() => import('./screens/AssignClients'));
 const IvaModule = lazy(() => import('./iva/IvaModule'));
+const LibrosModule = lazy(() => import('./libros/LibrosModule'));
 const MarcacionesModule = lazy(() => import('./marcaciones/MarcacionesModule'));
 const XmlToolModule = lazy(() => import('./xml/XmlToolModule'));
 // La planilla de marcaciones cargada se descarta al cerrar sesión o cambiar de usuario.
@@ -24,7 +25,19 @@ import DesktopSidebar from './components/DesktopSidebar';
 import useMediaQuery from './hooks/useMediaQuery';
 import useAvisos from './hooks/useAvisos';
 import BuzonPanel from './components/BuzonPanel';
+import SugerenciasPanel from './components/SugerenciasPanel';
+import { useIntegraciones } from './agente/integraciones';
+
+const AgentePanel = lazy(() => import('./agente/AgentePanel'));
+import useSugerencias from './hooks/useSugerencias';
+import useAmbiente from './hooks/useAmbiente';
+import { useSitioWeb } from './estudio/sitioWeb';
+import AmbienteIntro from './ambiente/AmbienteIntro';
+import './ambiente/ambiente.css';
+import { AMBIENTE_NINGUNA, resolverAmbiente } from './ambiente/ambientes';
 import PendingClientOpener from './components/PendingClientOpener';
+import GuidedTour from './components/GuidedTour';
+import { construirPasosGuia } from './guia/pasosGuia';
 const SettingsDialog = lazy(() => import('./components/SettingsDialog'));
 import { ClientsProvider, useClientsActions } from './context/ClientsContext';
 import { STORAGE_KEY_USER } from './config';
@@ -36,7 +49,7 @@ import {
 import { formatPeriodLabel } from './utils';
 import { api, onPrivateDataCleared } from './api';
 import { olvidarPlanilla } from './marcaciones/marcacionesStore';
-import { Calendar, User, Menu, X, UserCog, RefreshCw, Settings, Bell } from 'lucide-react';
+import { Calendar, User, Menu, X, UserCog, RefreshCw, Settings, Bell, HelpCircle, Lightbulb, Sparkles } from 'lucide-react';
 import './styles.css';
 import './ui-executive/recepcion-buzon.css';
 
@@ -120,6 +133,12 @@ export default function App({
   const [buzonOpen, setBuzonOpen] = useState(false);
   const [avisoTarget, setAvisoTarget] = useState(null);
   const [appNotice, setAppNotice] = useState('');
+  // Guía interactiva del sistema (botón «?» y, la primera vez, automática).
+  const [guiaOpen, setGuiaOpen] = useState(false);
+  // Sugerencias para mejorar el sistema (ventana bajo el ícono de la barra).
+  const [sugOpen, setSugOpen] = useState(false);
+  const [agenteOpen, setAgenteOpen] = useState(false);
+  const sugButtonRef = useRef(null);
   const [initialScreenReady, setInitialScreenReady] = useState(false);
   const markInitialScreenReady = useCallback(() => setInitialScreenReady(true), []);
 
@@ -146,6 +165,63 @@ export default function App({
   const authReady = !user || authState.status !== 'checking';
   const buzon = useAvisos(authenticated && !readOnlyPreview, `${user || ''}|${activeSessionToken}`);
   const initialContentReady = initialScreenReady && authReady;
+  const isAdminUser = userRole === 'SUPERUSUARIO' || userRole === 'ADMINISTRADOR';
+  // Página web del estudio (configurable en Vencimientos IVA → Colores y feriados).
+  const sitioWebEstudio = useSitioWeb(authenticated && !readOnlyPreview);
+  // Asistente con IA: el botón aparece si el backend tiene el módulo; a los
+  // administradores también cuando falta la clave, para ver cómo activarlo.
+  const integraciones = useIntegraciones(authenticated && !readOnlyPreview);
+  // Ambientación por época (Navidad, estaciones…): la elige cada usuario.
+  const ambienteSessionKey = `${user || ''}|${activeSessionToken}`;
+  const ambientePref = useAmbiente(
+    uiMode === 'executive' && authenticated && !readOnlyPreview,
+    user,
+    ambienteSessionKey
+  );
+  const ambienteActivo =
+    uiMode === 'executive' && authenticated && !readOnlyPreview ? resolverAmbiente(ambientePref.ambientacion) : null;
+  const [introAmbiente, setIntroAmbiente] = useState(null);
+  const ambienteActivoId = ambienteActivo?.id || '';
+  // La animación se ve una vez al ingresar (no al recargar la misma pestaña).
+  useEffect(() => {
+    if (!ambienteActivoId || !ambientePref.loaded || !ambientePref.animacion) return undefined;
+    let reducir = false;
+    try {
+      reducir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      reducir = false;
+    }
+    if (reducir) return undefined;
+    let hash = 5381;
+    for (const ch of ambienteSessionKey) hash = ((hash * 33) ^ ch.charCodeAt(0)) >>> 0;
+    const clave = `ctc:ambiente-intro:${hash.toString(36)}`;
+    try {
+      if (sessionStorage.getItem(clave)) return undefined;
+      sessionStorage.setItem(clave, '1');
+    } catch {
+      /* sin almacenamiento: se muestra igual */
+    }
+    const t = setTimeout(() => setIntroAmbiente(ambienteActivoId), 400);
+    return () => clearTimeout(t);
+  }, [ambienteActivoId, ambientePref.loaded, ambientePref.animacion, ambienteSessionKey]);
+  const cerrarIntroAmbiente = useCallback(() => setIntroAmbiente(null), []);
+  const guardarAmbiente = useCallback(
+    async (cambios) => {
+      await ambientePref.guardar(cambios);
+      // Al elegir una ambientación se muestra su animación como vista previa.
+      const elegida = cambios.ambientacion !== undefined ? resolverAmbiente(cambios.ambientacion) : null;
+      if (elegida && ambientePref.animacion !== false && cambios.ambientacion !== AMBIENTE_NINGUNA) {
+        setIntroAmbiente(null);
+        setTimeout(() => setIntroAmbiente(elegida.id), 50);
+      }
+    },
+    [ambientePref]
+  );
+  const sugerencias = useSugerencias(
+    authenticated && !readOnlyPreview,
+    `${user || ''}|${activeSessionToken}`,
+    isAdminUser
+  );
 
   // Suscripción al estado de la cola de guardado en memoria y protección
   // antes de cerrar o esconder la pestaña cuando todavía hay cambios sin
@@ -193,6 +269,7 @@ export default function App({
     setIvaOpenRuc(null);
     setMobileMenuOpen(false);
     setBuzonOpen(false);
+    setAgenteOpen(false);
     setAvisoTarget(null);
   }, []);
 
@@ -546,6 +623,7 @@ export default function App({
       className={`${className} ${buzon.noLeidos > 0 ? 'has-unread' : ''}`}
       onClick={() => {
         setMobileMenuOpen(false);
+        setSugOpen(false);
         setBuzonOpen(true);
         buzon.refresh();
       }}
@@ -560,6 +638,66 @@ export default function App({
       )}
     </button>
   );
+
+  const SECCIONES_SUG = {
+    stats: 'Estadísticas',
+    clients: 'Clientes',
+    iva: 'Vencimientos IVA',
+    assign: 'Asignar clientes',
+    marcaciones: 'Marcaciones',
+  };
+  const seccionActual = !year || !month
+    ? 'Elección de período'
+    : selectedClient
+      ? 'Ficha del cliente'
+      : creatingWithHeaders
+        ? 'Nuevo cliente'
+        : SECCIONES_SUG[assignClientsOpen ? 'assign' : mobileTab] || '';
+  const cerrarSugerencias = useCallback(() => setSugOpen(false), []);
+  const cerrarAgente = useCallback(() => setAgenteOpen(false), []);
+  const agenteDisponible = authenticated && !readOnlyPreview && Boolean(year && month) &&
+    (integraciones.agente.activo || (isAdminUser && integraciones.cargado && integraciones.error !== 'SIN_MODULO'));
+  const renderAgenteButton = () => (
+    <button
+      type="button"
+      className="rx-bell-button rx-agente-button"
+      onClick={() => {
+        setMobileMenuOpen(false);
+        setBuzonOpen(false);
+        setSugOpen(false);
+        setAgenteOpen(true);
+      }}
+      title="Asistente (IA)"
+      aria-label="Abrir el asistente"
+    >
+      <Sparkles size={16} />
+    </button>
+  );
+  const renderSugerenciasButton = () => {
+    const nuevas = isAdminUser ? sugerencias.nuevas : 0;
+    return (
+      <button
+        ref={sugButtonRef}
+        type="button"
+        className={`rx-bell-button rx-ideas-button ${nuevas > 0 ? 'has-unread' : ''}`}
+        onClick={() => {
+          setMobileMenuOpen(false);
+          setBuzonOpen(false);
+          setSugOpen((v) => !v);
+        }}
+        title="Sugerencias para mejorar el sistema"
+        aria-label={nuevas > 0 ? `Sugerencias, ${nuevas} nuevas` : 'Sugerencias para mejorar el sistema'}
+        aria-expanded={sugOpen}
+      >
+        <Lightbulb size={16} />
+        {nuevas > 0 && (
+          <span className="rx-bell-badge" aria-hidden="true">
+            {nuevas > 99 ? '99+' : nuevas}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   // La confirmación de PIN actualizado desaparece sola para no acumular
   // avisos en pantalla.
@@ -597,6 +735,70 @@ export default function App({
     setMobileTab(tab);
     setAssignClientsOpen(tab === 'assign');
   }, [mobileTab, canAssignClients]);
+
+  // ── Guía interactiva ────────────────────────────────────────────────
+  // Sólo en la interfaz ejecutiva (la que tiene secciones) y con un período
+  // abierto, porque la guía recorre las secciones de ese período.
+  const guiaDisponible =
+    uiMode === 'executive' && authenticated && !mustChangePin && !readOnlyPreview && Boolean(year && month);
+  const guiaKey = `ctc:guia-vista:v1:${user || ''}`;
+  const pasosGuia = useMemo(
+    () => construirPasosGuia({
+      canAssign: canAssignClients,
+      isSuper: userRole === 'SUPERUSUARIO',
+      conAsistente: Boolean(integraciones.agente.activo),
+    }),
+    [canAssignClients, userRole, integraciones.agente.activo]
+  );
+  // La guía navega con una referencia estable para no reiniciar el paso.
+  const tabChangeRef = useRef(handleMobileTabChange);
+  useEffect(() => {
+    tabChangeRef.current = handleMobileTabChange;
+  }, [handleMobileTabChange]);
+  // Sección visible ahora (para que la guía no la reinicie sin necesidad).
+  const tabActualRef = useRef('');
+  useEffect(() => {
+    tabActualRef.current = assignClientsOpen ? 'assign' : mobileTab;
+  }, [assignClientsOpen, mobileTab]);
+  const handleGuiaNavigate = useCallback((tab, mantener = false) => {
+    setBuzonOpen(false);
+    setSugOpen(false);
+    setSettingsOpen(false);
+    setMobileMenuOpen(false);
+    // «mantener»: si ya está en esa sección, deja abierta la ficha o la
+    // liquidación que la guía está mostrando.
+    if (mantener && tabActualRef.current === tab) return;
+    tabChangeRef.current(tab);
+  }, []);
+  const abrirGuia = useCallback(() => {
+    setBuzonOpen(false);
+    setAgenteOpen(false);
+    setSugOpen(false);
+    setMobileMenuOpen(false);
+    setGuiaOpen(true);
+  }, []);
+  const cerrarGuia = useCallback(() => {
+    setGuiaOpen(false);
+    try {
+      localStorage.setItem(guiaKey, new Date().toISOString());
+    } catch {
+      /* sin almacenamiento: la guía puede volver a aparecer */
+    }
+    tabChangeRef.current('clients');
+  }, [guiaKey]);
+  // La primera vez que cada usuario entra a un período, la guía arranca sola.
+  useEffect(() => {
+    if (!guiaDisponible || guiaOpen) return undefined;
+    let vista = true;
+    try {
+      vista = Boolean(localStorage.getItem(guiaKey));
+    } catch {
+      vista = true;
+    }
+    if (vista) return undefined;
+    const timer = setTimeout(() => setGuiaOpen(true), 900);
+    return () => clearTimeout(timer);
+  }, [guiaDisponible, guiaKey, guiaOpen]);
 
   useEffect(() => {
     if (!year || !month || selectedClient || creatingWithHeaders) return undefined;
@@ -726,6 +928,23 @@ export default function App({
           {/* Sin marca: el logo y el lema no aportan a la operación diaria.
               La barra queda limpia con las acciones (período, actualizar,
               configuración, usuario). */}
+          {ambienteActivo && (
+            <>
+              <span className="rx-amb-strip" aria-hidden="true" />
+              <div
+                className="rx-amb-pill"
+                title={`Ambientación: ${ambienteActivo.nombre} (se cambia en Configuración)`}
+              >
+                <span className="rx-amb-pill-emoji" aria-hidden="true">
+                  {ambienteActivo.emoji}
+                </span>
+                <span className="rx-amb-pill-text">
+                  {ambienteActivo.saludo}
+                  {user ? `, ${String(user).split(' ')[0]}` : ''}!
+                </span>
+              </div>
+            </>
+          )}
 
           <div className="real-exec-navbar-actions">
             {syncStatus.status === 'syncing' && (
@@ -739,7 +958,7 @@ export default function App({
                 <span>Sincronizando…</span>
               </span>
             )}
-            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && mobileTab !== 'xml' && (
+            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && mobileTab !== 'libros' && mobileTab !== 'xml' && (
               <button
                 type="button"
                 className="real-exec-refresh-button"
@@ -778,6 +997,19 @@ export default function App({
               </button>
             )}
             {!readOnlyPreview && renderBellButton('rx-bell-button')}
+            {agenteDisponible && renderAgenteButton()}
+            {!readOnlyPreview && renderSugerenciasButton()}
+            {guiaDisponible && (
+              <button
+                type="button"
+                className="rx-help-button"
+                onClick={abrirGuia}
+                title="Guía del sistema"
+                aria-label="Ver la guía del sistema"
+              >
+                <HelpCircle size={16} />
+              </button>
+            )}
             <button
               type="button"
               className="real-exec-theme-button real-exec-settings-button"
@@ -893,6 +1125,8 @@ export default function App({
             )}
 
             {user && !readOnlyPreview && renderBellButton('rx-bell-button')}
+            {agenteDisponible && renderAgenteButton()}
+            {user && !readOnlyPreview && authenticated && renderSugerenciasButton()}
 
             {/* Píldora de usuario: visible siempre, en desktop y mobile,
                 pegada a la derecha del todo. */}
@@ -1005,7 +1239,13 @@ export default function App({
   // recargar. Ese estado se lee con un hook, por eso el render se delega
   // al componente <PeriodScreens> de más abajo.
   return (
-    <div className={`app-container ${uiMode === 'executive' ? 'real-exec-app' : ''}`}>
+    <div
+      className={`app-container ${uiMode === 'executive' ? 'real-exec-app' : ''}`}
+      data-ambiente={ambienteActivo?.id || undefined}
+    >
+      {introAmbiente && resolverAmbiente(introAmbiente) && (
+        <AmbienteIntro key={introAmbiente} ambiente={resolverAmbiente(introAmbiente)} onFin={cerrarIntroAmbiente} />
+      )}
       <AppSplashLoader
         logoSrc="/logo-mj.webp"
         ready={initialContentReady}
@@ -1023,6 +1263,21 @@ export default function App({
           {appNotice}
         </div>
       )}
+      {guiaDisponible && guiaOpen && (
+        <GuidedTour steps={pasosGuia} onNavigate={handleGuiaNavigate} onClose={cerrarGuia} />
+      )}
+      <AnimatePresence>
+        {authenticated && !readOnlyPreview && sugOpen && (
+          <SugerenciasPanel
+            key="sugerencias"
+            anchorRef={sugButtonRef}
+            admin={isAdminUser}
+            data={sugerencias}
+            seccion={seccionActual}
+            onClose={cerrarSugerencias}
+          />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {authenticated && buzonOpen && (
           <BuzonPanel
@@ -1059,6 +1314,7 @@ export default function App({
           user={user}
           authState={authState}
           readOnlyPreview={readOnlyPreview}
+          sitioWebEstudio={sitioWebEstudio}
           PeriodOverviewComponent={PeriodOverviewComponent}
           periodOverviewRef={periodOverviewRef}
           canAssignClients={canAssignClients}
@@ -1099,6 +1355,11 @@ export default function App({
           mobileTab={mobileTab}
           onMobileTabChange={handleMobileTabChange}
         />
+        {agenteDisponible && (
+          <Suspense fallback={null}>
+            <AgentePanel key={user || ''} open={agenteOpen} onClose={cerrarAgente} />
+          </Suspense>
+        )}
       </ClientsProvider>
 
       {uiMode === 'executive' && !isMobilePeriodNav && authenticated && year && month &&
@@ -1107,6 +1368,7 @@ export default function App({
             activeTab={assignClientsOpen ? 'assign' : mobileTab}
             canAssignClients={canAssignClients}
             onChange={handleMobileTabChange}
+            sitioWeb={sitioWebEstudio}
           />
         )}
 
@@ -1139,6 +1401,12 @@ export default function App({
         onChangeUser={handleChangeUser}
         onThemeChange={setTheme}
         onFontScaleChange={setFontScale}
+        sitioWeb={sitioWebEstudio}
+        ambiente={
+          uiMode === 'executive' && authenticated && !readOnlyPreview
+            ? { ambientacion: ambientePref.ambientacion, animacion: ambientePref.animacion, guardar: guardarAmbiente }
+            : null
+        }
       />
       </Suspense>
       )}
@@ -1153,6 +1421,7 @@ function PeriodScreens({
   user,
   authState,
   readOnlyPreview,
+  sitioWebEstudio,
   PeriodOverviewComponent,
   periodOverviewRef,
   canAssignClients,
@@ -1188,7 +1457,7 @@ function PeriodScreens({
     if (!user) {
       return (
         <motion.div key="name-picker" variants={pageVariants} initial="initial" animate="animate" exit="exit">
-          <NamePicker onPick={onPickUser} onReady={onInitialContentReady} />
+          <NamePicker onPick={onPickUser} onReady={onInitialContentReady} sitioWeb={sitioWebEstudio} />
         </motion.div>
       );
     }
@@ -1298,6 +1567,14 @@ function PeriodScreens({
       return (
         <motion.div key={`marcaciones-${year}-${month}`} variants={pageVariants} initial="initial" animate="animate" exit="exit">
           <MarcacionesModule withDesktopSidebar={!isMobilePeriodNav} />
+        </motion.div>
+      );
+    }
+
+    if (usePeriodTabs && mobileTab === 'libros') {
+      return (
+        <motion.div key={`libros-${year}-${month}`} variants={pageVariants} initial="initial" animate="animate" exit="exit">
+          <LibrosModule withDesktopSidebar={!isMobilePeriodNav} />
         </motion.div>
       );
     }

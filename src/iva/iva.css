@@ -206,6 +206,8 @@
 }
 .iva-tag.pend { background: var(--rx-amber-soft); color: var(--iva-warn); }
 .iva-tag.env { background: var(--rx-brand-soft); color: var(--rx-brand); }
+.iva-tag.grupo { background: rgba(124, 58, 237, 0.14); color: #7c3aed; }
+[data-theme='dark'] .iva-tag.grupo { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
 .iva-tag.pres { background: var(--rx-green-soft); color: var(--iva-favor); }
 .iva-tag.none { background: var(--rx-soft); color: var(--rx-muted); }
 .iva-tag.exc { background: var(--rx-red-soft); color: var(--iva-pay); margin-left: 6px; vertical-align: 1px; }
@@ -506,4 +508,34 @@
   color: var(--rx-red, #d05b55);
   font-size: var(--rx-fs-2xs);
   font-weight: 800;
+}
+
+/* ── Enviar por Whaticket (confirmación) ─────────────────────────────── */
+.iva-wt-preview {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid var(--rx-line);
+  border-radius: 10px;
+  background: var(--rx-soft, #f4f5f6);
+}
+.iva-wt-preview img {
+  max-width: 100%;
+  max-height: 42vh;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.iva-wt-texto {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--rx-line-strong, #bcbec3);
+  border-radius: 10px;
+  background: var(--rx-surface);
+  color: var(--rx-ink);
+  font: inherit;
+  resize: vertical;
 }

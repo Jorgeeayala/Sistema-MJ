@@ -89,6 +89,110 @@ la planilla de administración. El archivo `.dat` original no se envía. Al publ
 cambios del módulo, actualizar este archivo de Apps Script y crear una nueva versión
 del Web App además de publicar el frontend.
 
+### Asistente con IA y envío de fichas por Whaticket
+
+**Qué hace**
+
+- **Asistente** (botón ✨ de la barra superior): un chat que responde en
+  lenguaje natural sobre la cartera del período abierto ("¿qué clientes míos
+  faltan presentar?"), el IVA ("¿quiénes vencieron y no están presentados?",
+  "¿cuánto paga Panadería Sur?") y el uso del sistema ("¿cómo registro la
+  documentación?"). Es de **sólo lectura**: no cambia nada en la planilla.
+- **Enviar por WhatsApp con Whaticket** (en la liquidación IVA de cada
+  cliente): el botón tiene dos opciones.
+  - **Al cliente**: abre dentro de Sistema MJ el chat de ese cliente en
+    Whaticket (sólo ese chat), con la ficha lista para revisar y enviar.
+    Desde ahí también se ve la conversación y se le puede responder.
+  - **Al grupo contable**: manda la ficha al grupo de WhatsApp del equipo.
+  Las dos marcan la ficha como **Enviado** y salen desde el número del estudio.
+  **Ver chat** abre la conversación del cliente sin enviar nada. Sin Whaticket
+  configurado, el botón sigue funcionando como antes (WhatsApp Web / app).
+
+**Reglas de Whaticket que conviene conocer**
+
+- Si el cliente escribió en los últimos 7 días, la ficha va a su chat
+  existente y no consume créditos.
+- Si no escribió en 7 días (o nunca), Whaticket sólo permite escribirle con un
+  **mensaje nuevo**, que funciona como una campaña de un mensaje y **puede
+  consumir créditos** del plan. Hasta que el cliente responda, no se le puede
+  contestar en el chat.
+- Al grupo contable sólo se puede escribir si alguien escribió en el grupo en
+  los últimos 7 días.
+
+**Cómo está armado**
+
+- `AppsScript-Agente.gs`: guarda la clave de la IA, fija el modelo y el tope
+  de respuesta, aplica un límite diario por usuario y registra cada consulta
+  (tokens y costo estimado) en la hoja `Agente Uso`.
+- `AppsScript-Whaticket.gs`: habla con la API de Whaticket
+  (`https://api.whaticket.com/api/v1`) con el token guardado en el servidor.
+  Registra cada envío en la hoja `Whaticket Envíos`.
+- Las herramientas del asistente (`src/agente/herramientas.js`) corren en la
+  app con los mismos datos y permisos que ya ve el usuario. Nunca se le pasan
+  columnas de claves (Clave MH, contraseñas, PIN).
+- Lo que el asistente "sabe" del sistema está en `src/agente/conocimiento.js`.
+  **Al agregar o cambiar una función, actualizá ese texto.**
+
+**Instalación**
+
+1. En el proyecto de Apps Script, crear dos archivos nuevos (**+ →
+   Secuencia de comandos**): `Agente` con `AppsScript-Agente.gs` y
+   `Whaticket` con `AppsScript-Whaticket.gs`. Reemplazar el contenido de
+   `Avisos` por la versión nueva de `AppsScript-Avisos.gs` (su router deriva
+   las acciones `agente*` y `whaticket*`; no hace falta tocar `doPost`).
+2. En Whaticket: **Integraciones → Tokens → Nuevo token** con los permisos
+   `tickets:view`, `tickets:viewAll`, `tickets:viewPending`,
+   `campaigns:create`, `campaigns:start` y `connections:view`.
+3. **Configuración del proyecto → Propiedades de la secuencia de comandos**:
+
+   | Propiedad | Para qué |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | Clave de [console.anthropic.com](https://console.anthropic.com) (API Keys). Sin ella el asistente queda apagado. |
+   | `AGENTE_MODELO` | Opcional. Por defecto `claude-haiku-5-5`. |
+   | `AGENTE_ESFUERZO` | Opcional. `low`, `medium` (por defecto) o `high`: cuánto "piensa" el modelo antes de responder. |
+   | `AGENTE_LIMITE_DIARIO` | Opcional. Consultas por usuario y por día (200 por defecto). |
+   | `WHATICKET_TOKEN` | Clave del token de Whaticket. Sin ella el botón sigue como antes. |
+   | `WHATICKET_GRUPO_NOMBRE` | Nombre exacto del grupo contable como aparece en Whaticket. |
+   | `WHATICKET_CONEXION_ID` | Opcional. Sólo si hay más de una conexión de WhatsApp. |
+   | `WHATICKET_COLA_ID` | Opcional. Cola donde se abren los chats nuevos. |
+   | `WHATICKET_USUARIO_ID` | Opcional. Usuario de Whaticket al que se asignan los chats nuevos. |
+
+4. Ejecutar una vez `probarAsistente` y `probarWhaticket` desde el editor
+   (piden permiso para conectarse a servicios externos) y revisar el registro:
+   `probarWhaticket` muestra los permisos del token, la conexión de WhatsApp y
+   el grupo contable encontrado.
+5. **Implementar → Administrar implementaciones → editar → Nueva versión**.
+6. Recompilar el frontend y el APK.
+
+**Costos.** La API de la IA se paga por uso, con saldo precargado. En
+console.anthropic.com → Limits conviene fijar un tope mensual. Con
+`claude-haiku-5-5` una consulta típica cuesta alrededor de US$ 0,003; la hoja
+`Agente Uso` muestra el costo estimado de cada una.
+
+### Aviso diario de vencimientos al grupo contable
+
+Cada mañana el grupo de WhatsApp del equipo recibe (por Whaticket) un resumen:
+lo que vence hoy y hasta el día del próximo aviso, con los pendientes por
+encargado y el monto a pagar de cada cliente, y los vencidos sin presentar del
+período. Usa la hoja mensual de la planilla y las liquidaciones de IVA, con el
+mismo cálculo de fechas que la app. Si Whaticket no puede enviar (por ejemplo,
+nadie escribió en el grupo en 7 días), el aviso llega por correo.
+
+Instalación (archivo `AppsScript-AvisoDiario.gs`, necesita `Whaticket`, `IVA` y `Código`):
+
+1. Crear el archivo `AvisoDiario` en el Apps Script y pegar el contenido.
+2. Ejecutar `probarAvisoDiario`: muestra en el registro el mensaje de hoy sin enviarlo.
+3. Ejecutar `instalarAvisoDiario`: queda programado todos los días.
+
+| Propiedad | Para qué |
+|---|---|
+| `AVISO_DIARIO_HORA` | Hora del envío, 0 a 23 (por defecto 7, hora de Paraguay). |
+| `AVISO_DIARIO_DIAS` | `1-6` lunes a sábado (por defecto), `1-5` o `0-6`. |
+| `AVISO_DIARIO_EMAIL` | Correo de respaldo (por defecto, el del dueño del script). |
+
+`enviarAvisoDiarioAhora` lo manda en el momento; `desinstalarAvisoDiario` lo apaga.
+No hace falta publicar una nueva versión del Web App.
+
 ### Migrar los datos de la app de Netlify
 
 Si ya había liquidaciones cargadas en `vencimientos-iva`, se traen una sola

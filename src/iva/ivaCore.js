@@ -11,6 +11,9 @@ export const DEFAULT_FERIADOS = ['2026-01-01', '2026-03-01', '2026-04-02', '2026
   '2027-01-01', '2027-03-01', '2027-03-25', '2027-03-26', '2027-05-01', '2027-05-14', '2027-05-15', '2027-06-12', '2027-08-15', '2027-09-29', '2027-12-08', '2027-12-25'];
 export const DEFAULT_MORA = { interes: 0.0005, contrav: 50000 };
 export const DEFAULT_FIRMA = 'MJ Estudio Contable';
+// Página del estudio mientras no tenga dominio propio; se cambia desde
+// Vencimientos IVA → Colores y feriados → Nombre del estudio → Sitio web.
+export const DEFAULT_SITIO_WEB = 'https://mj-estudio-contable.lovable.app';
 // Cada monto guarda `iva`: true = el IVA se extrae del monto (base = m / 1,1);
 // false = el IVA se suma encima (base = m). Los montos viejos guardados como
 // número suelto se interpretan con IVA_DEFAULT (extraído), como siempre.
@@ -19,7 +22,15 @@ export const IVA_DEFAULT = true;
 // IVA" lo extrae (pedido de la oficina). Cada monto nuevo arranca en "IVA
 // incluido", o sea iva: false.
 export const IVA_DEFAULT_NUEVO = false;
-export const ESTADOS = { pend: 'Pendiente', env: 'Enviado al cliente', pres: 'Presentado' };
+// En el orden en que avanza una liquidación (también es el orden del selector).
+export const ESTADOS = { pend: 'Pendiente', grupo: 'Enviado al grupo contable', env: 'Enviado al cliente', pres: 'Presentado' };
+const ORDEN_ESTADOS = ['pend', 'grupo', 'env', 'pres'];
+
+// Estado después de mandar la ficha: nunca retrocede (si ya estaba enviada al
+// cliente o presentada, mandarla al grupo no la cambia).
+export function estadoTrasEnvio(actual, nuevo) {
+  return ORDEN_ESTADOS.indexOf(nuevo) > ORDEN_ESTADOS.indexOf(actual || 'pend') ? nuevo : (actual || 'pend');
+}
 
 // Categorías con montos múltiples. r = tasa de IVA (0 = exento). Según Formulario 120 v4 (DNIT).
 export const LISTS = [
@@ -67,9 +78,10 @@ export function monthIndexFromSheet(sheetName) {
   return num ? Number(num[1]) - 1 : null;
 }
 
-// Período fiscal de una hoja mensual: la hoja "OCTUBRE 2026" es la del IVA de
-// septiembre 2026 (se presenta en octubre). Devuelve "AAAA-MM" o null.
-export function periodoFiscalDeHoja(year, sheetName, desfase = -1) {
+// Período fiscal de una hoja mensual: la hoja "OCTUBRE 2026" es la de los
+// documentos e IVA de octubre 2026, que vence en noviembre (día 7 + 2·VENC.).
+// Devuelve "AAAA-MM" o null.
+export function periodoFiscalDeHoja(year, sheetName, desfase = 0) {
   const idx = monthIndexFromSheet(sheetName);
   const yearInSheet = String(sheetName || '').match(/\b(20\d{2})\b/);
   const y = Number(yearInSheet ? yearInSheet[1] : year);
@@ -119,9 +131,24 @@ export function normalizeConfig(raw) {
     feriados: Array.isArray(c.feriados) ? c.feriados : [...DEFAULT_FERIADOS],
     mora: { ...DEFAULT_MORA, ...(c.mora || {}) },
     firma: c.firma || '',
+    sitioWeb: normalizarSitioWeb(c.sitioWeb),
   };
 }
 export function firma(config) { return (config && config.firma) || DEFAULT_FIRMA; }
+// Dirección web válida (http/https) o '' si no lo es. Acepta «www.x.com».
+export function normalizarSitioWeb(raw) {
+  let v = String(raw || '').trim();
+  if (!v) return '';
+  if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+  try {
+    const u = new URL(v);
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return '';
+    return u.href.replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+export function sitioWeb(config) { return (config && normalizarSitioWeb(config.sitioWeb)) || DEFAULT_SITIO_WEB; }
 export function colorFor(config, t) { return (config.colores && config.colores[t]) || DEFAULT_COLORS[t] || '#888'; }
 
 /* ---------- Vencimientos ---------- */

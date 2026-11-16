@@ -303,10 +303,20 @@ function fillMergedValues(range) {
 }
 
 // ── TOKEN GENERAL DE LA API ─────────────────────────────────────────────
+// Rotación sin cortar el servicio: mientras exista API_TOKEN_ANTERIOR se
+// aceptan las dos claves (la app web y el APK viejo siguen funcionando hasta
+// que se actualicen). Al terminar la rotación, se borra API_TOKEN_ANTERIOR.
 function isAuthorized(token) {
-  const validToken = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
-  if (!validToken) return false;
-  return constantTimeEquals(String(token || ''), validToken);
+  const props = PropertiesService.getScriptProperties();
+  const recibido = String(token || '');
+  const validos = [props.getProperty('API_TOKEN'), props.getProperty('API_TOKEN_ANTERIOR')]
+    .filter(function (t) { return t && String(t).trim(); });
+  let ok = false;
+  validos.forEach(function (t) {
+    // sin cortar el bucle: el tiempo no depende de cuál coincide
+    if (constantTimeEquals(recibido, String(t))) ok = true;
+  });
+  return ok;
 }
 
 function unauthorizedResponse() {
@@ -2686,6 +2696,24 @@ function handleRecepcionPintarFila(body, sessionUser) {
 }
 
 function handleAvisosAction(action, body, sessionUser, sessionRole) {
+  // Las sugerencias (AppsScript-Sugerencias.gs), las preferencias y los libros
+  // IVA entran por acá para no tener que tocar doPost otra vez.
+  if (String(action).indexOf('sugerencias') === 0 && typeof handleSugerenciasAction === 'function') {
+    return handleSugerenciasAction(action, body, sessionUser, sessionRole);
+  }
+  // Preferencias de cada usuario (AppsScript-Preferencias.gs).
+  if (String(action).indexOf('preferencias') === 0 && typeof handlePreferenciasAction === 'function') {
+    return handlePreferenciasAction(action, body, sessionUser, sessionRole);
+  }
+  // Libros IVA de compras y ventas importados de SIGA (AppsScript-Libros.gs).
+  if (String(action).indexOf('libros') === 0 && typeof handleLibrosAction === 'function') {
+    return handleLibrosAction(action, body, sessionUser, sessionRole);
+  }
+  // Asistente con IA y envío de fichas por Whaticket (AppsScript-Agente.gs).
+  if ((String(action).indexOf('agente') === 0 || String(action).indexOf('whaticket') === 0) &&
+      typeof handleAgenteAction === 'function') {
+    return handleAgenteAction(action, body, sessionUser, sessionRole);
+  }
   const routes = {
     avisosCrear: [function () { return handleAvisosCrear(body, sessionUser); }, 'AVISOS_CREAR_ERROR'],
     avisosListar: [function () { return handleAvisosListar(sessionUser); }, 'AVISOS_LISTAR_ERROR'],
@@ -2699,6 +2727,1852 @@ function handleAvisosAction(action, body, sessionUser, sessionRole) {
   } catch (err) {
     return errorResponse(err.message, route[1]);
   }
+}
+
+// ===== AppsScript-Sugerencias.gs =====
+/**
+ * MÓDULO SUGERENCIAS - archivo aparte del backend de Control Clientes.
+ *
+ * Cualquier usuario deja sugerencias para mejorar el sistema (recomendación,
+ * fallo, consejo u otro). ADMINISTRADOR y SUPERUSUARIO ven todas, con el
+ * nombre de quien la escribió, y las marcan como vistas o resueltas. Los
+ * demás ven sólo las suyas y en qué estado están.
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Sugerencias" y
+ *      pegar este contenido completo.
+ *   2. No hace falta tocar Code.gs: las acciones sugerencias* llegan por
+ *      handleAvisosAction (AppsScript-Avisos.gs), que ya está en doPost.
+ *   3. Implementar > Administrar implementaciones > editar > Nueva versión.
+ *
+ * Hoja "Sugerencias" en la planilla de administración (se crea sola), una
+ * fila por sugerencia. Usa funciones de Code.gs: getAdminSpreadsheet,
+ * canonicalUserName, normalizeRole, jsonResponse y errorResponse.
+ */
+
+const SUGERENCIAS_SHEET_NAME = 'Sugerencias';
+const SUGERENCIAS_HEADERS = [
+  'ID', 'Creada', 'Usuario', 'Rol', 'Tipo', 'Sección', 'Texto', 'Estado', 'Revisada por', 'Revisada el'
+];
+const SUGERENCIAS_COL_ESTADO = 8;
+const SUGERENCIAS_TIPOS = ['recomendacion', 'fallo', 'consejo', 'otro'];
+const SUGERENCIAS_ESTADOS = ['nueva', 'vista', 'resuelta'];
+const SUGERENCIAS_MAX_TEXTO = 1500;
+const SUGERENCIAS_MAX_FILAS_LEIDAS = 3000;
+const SUGERENCIAS_MAX_DEVUELTAS = 300;
+const SUGERENCIAS_MAX_POR_DIA = 30; // por usuario, para frenar envíos repetidos
+
+function ensureSugerenciasSheet() {
+  const ss = getAdminSpreadsheet();
+  let sheet = ss.getSheetByName(SUGERENCIAS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUGERENCIAS_SHEET_NAME);
+    // Todo como texto: Sheets no convierte fechas ni números escritos.
+    sheet.getRange(1, 1, sheet.getMaxRows(), SUGERENCIAS_HEADERS.length).setNumberFormat('@');
+    sheet.getRange(1, 1, 1, SUGERENCIAS_HEADERS.length).setValues([SUGERENCIAS_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(7, 420);
+  }
+  return sheet;
+}
+
+function sugerenciasEsAdmin_(sessionRole) {
+  const rol = normalizeRole(sessionRole);
+  return rol === 'ADMINISTRADOR' || rol === 'SUPERUSUARIO';
+}
+
+function sugerenciasTexto_(value, max) {
+  if (value instanceof Date) return value.toISOString();
+  return String(value === null || value === undefined ? '' : value).trim().slice(0, max);
+}
+
+function sugerenciasLeer_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const desde = Math.max(2, lastRow - SUGERENCIAS_MAX_FILAS_LEIDAS + 1);
+  const values = sheet.getRange(desde, 1, lastRow - desde + 1, SUGERENCIAS_HEADERS.length).getValues();
+  return values.map(function (r, i) {
+    const estado = sugerenciasTexto_(r[7], 20).toLowerCase();
+    return {
+      fila: desde + i,
+      id: sugerenciasTexto_(r[0], 60),
+      creada: sugerenciasTexto_(r[1], 40),
+      usuario: sugerenciasTexto_(r[2], 120),
+      rol: sugerenciasTexto_(r[3], 40),
+      tipo: sugerenciasTexto_(r[4], 20).toLowerCase(),
+      seccion: sugerenciasTexto_(r[5], 60),
+      texto: sugerenciasTexto_(r[6], SUGERENCIAS_MAX_TEXTO),
+      estado: SUGERENCIAS_ESTADOS.indexOf(estado) >= 0 ? estado : 'nueva',
+      revisadaPor: sugerenciasTexto_(r[8], 120),
+      revisadaEl: sugerenciasTexto_(r[9], 40)
+    };
+  }).filter(function (s) { return s.id; });
+}
+
+function sugerenciasPublica_(s) {
+  return {
+    id: s.id,
+    creada: s.creada,
+    usuario: s.usuario,
+    rol: s.rol,
+    tipo: s.tipo,
+    seccion: s.seccion,
+    texto: s.texto,
+    estado: s.estado,
+    revisadaPor: s.revisadaPor,
+    revisadaEl: s.revisadaEl
+  };
+}
+
+function handleSugerenciasCrear(body, sessionUser, sessionRole) {
+  const tipo = sugerenciasTexto_(body.tipo, 20).toLowerCase();
+  if (SUGERENCIAS_TIPOS.indexOf(tipo) < 0) {
+    return errorResponse('Elegí el tipo de sugerencia', 'SUGERENCIA_TIPO');
+  }
+  const texto = String(body.texto === null || body.texto === undefined ? '' : body.texto).trim();
+  if (texto.length < 3) return errorResponse('Escribí tu sugerencia', 'SUGERENCIA_VACIA');
+  if (texto.length > SUGERENCIAS_MAX_TEXTO) {
+    return errorResponse('La sugerencia es muy larga (máximo ' + SUGERENCIAS_MAX_TEXTO + ' caracteres)', 'SUGERENCIA_LARGA');
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return errorResponse('Las sugerencias están ocupadas, intentá de nuevo', 'SUGERENCIAS_LOCK_TIMEOUT');
+  }
+  try {
+    const sheet = ensureSugerenciasSheet();
+    const haceUnDia = Date.now() - 24 * 60 * 60 * 1000;
+    const usuario = canonicalUserName(sessionUser);
+    const hoy = sugerenciasLeer_(sheet).filter(function (s) {
+      return canonicalUserName(s.usuario) === usuario && Date.parse(s.creada) >= haceUnDia;
+    }).length;
+    if (hoy >= SUGERENCIAS_MAX_POR_DIA) {
+      return errorResponse('Llegaste al máximo de sugerencias por hoy. Probá mañana.', 'SUGERENCIAS_LIMITE');
+    }
+    const id = 'sg-' + Utilities.getUuid();
+    const fila = [
+      id,
+      new Date().toISOString(),
+      sessionUser,
+      normalizeRole(sessionRole) || '',
+      tipo,
+      sugerenciasTexto_(body.seccion, 60),
+      texto,
+      'nueva',
+      '',
+      ''
+    ].map(function (v) { return String(v); });
+    const destino = sheet.getRange(sheet.getLastRow() + 1, 1, 1, SUGERENCIAS_HEADERS.length);
+    destino.setNumberFormat('@');
+    destino.setValues([fila]);
+    return jsonResponse({ ok: true, id: id });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Administradores: todas. Resto: sólo las propias.
+function handleSugerenciasListar(sessionUser, sessionRole) {
+  const admin = sugerenciasEsAdmin_(sessionRole);
+  const usuario = canonicalUserName(sessionUser);
+  const lista = sugerenciasLeer_(ensureSugerenciasSheet()).filter(function (s) {
+    return admin || canonicalUserName(s.usuario) === usuario;
+  });
+  lista.reverse(); // más recientes primero
+  return jsonResponse({
+    ok: true,
+    admin: admin,
+    sugerencias: lista.slice(0, SUGERENCIAS_MAX_DEVUELTAS).map(sugerenciasPublica_),
+    nuevas: admin ? lista.filter(function (s) { return s.estado === 'nueva'; }).length : 0
+  });
+}
+
+// body.ids + body.estado ('vista' | 'resuelta' | 'nueva'). Sólo administradores.
+function handleSugerenciasEstado(body, sessionUser, sessionRole) {
+  if (!sugerenciasEsAdmin_(sessionRole)) {
+    return errorResponse('Sólo un administrador puede cambiar el estado', 'FORBIDDEN');
+  }
+  const estado = sugerenciasTexto_(body.estado, 20).toLowerCase();
+  if (SUGERENCIAS_ESTADOS.indexOf(estado) < 0) return errorResponse('Estado no válido', 'SUGERENCIA_ESTADO');
+  const ids = {};
+  (Array.isArray(body.ids) ? body.ids : []).forEach(function (id) { ids[String(id)] = true; });
+  if (!Object.keys(ids).length) return jsonResponse({ ok: true, cambiadas: 0 });
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return errorResponse('Las sugerencias están ocupadas, intentá de nuevo', 'SUGERENCIAS_LOCK_TIMEOUT');
+  }
+  let cambiadas = 0;
+  try {
+    const sheet = ensureSugerenciasSheet();
+    const ahora = new Date().toISOString();
+    sugerenciasLeer_(sheet).forEach(function (s) {
+      if (!ids[s.id] || s.estado === estado) return;
+      // "vista" no pisa una "resuelta" (al abrir la lista se marcan vistas).
+      if (estado === 'vista' && s.estado === 'resuelta') return;
+      const celdas = sheet.getRange(s.fila, SUGERENCIAS_COL_ESTADO, 1, 3);
+      celdas.setNumberFormat('@');
+      celdas.setValues([[estado, estado === 'nueva' ? '' : String(sessionUser), estado === 'nueva' ? '' : ahora]]);
+      cambiadas++;
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ ok: true, cambiadas: cambiadas });
+}
+
+function handleSugerenciasAction(action, body, sessionUser, sessionRole) {
+  const routes = {
+    sugerenciasCrear: [function () { return handleSugerenciasCrear(body, sessionUser, sessionRole); }, 'SUGERENCIAS_CREAR_ERROR'],
+    sugerenciasListar: [function () { return handleSugerenciasListar(sessionUser, sessionRole); }, 'SUGERENCIAS_LISTAR_ERROR'],
+    sugerenciasEstado: [function () { return handleSugerenciasEstado(body, sessionUser, sessionRole); }, 'SUGERENCIAS_ESTADO_ERROR']
+  };
+  const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
+  if (!route) return null;
+  try {
+    return route[0]();
+  } catch (err) {
+    return errorResponse(err.message, route[1]);
+  }
+}
+
+// ===== AppsScript-Preferencias.gs =====
+/**
+ * MÓDULO PREFERENCIAS - archivo aparte del backend de Control Clientes.
+ *
+ * Guarda preferencias de cada usuario que lo siguen en cualquier
+ * dispositivo. Por ahora: la ambientación por época del año (Navidad,
+ * estaciones, etc.) y si se muestra la animación al ingresar.
+ *
+ * También guarda una preferencia del EQUIPO (igual para todos): quiénes
+ * están excluidos de la asignación de clientes (no aparecen para asignar ni
+ * entran al reparto automático). La leen todos; sólo ADMINISTRADOR y
+ * SUPERUSUARIO la cambian. Vive en Script Properties.
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Preferencias" y
+ *      pegar este contenido completo.
+ *   2. No hace falta tocar Code.gs: las acciones preferencias* llegan por
+ *      handleAvisosAction (AppsScript-Avisos.gs), que ya está en doPost.
+ *   3. Implementar > Administrar implementaciones > editar > Nueva versión.
+ *
+ * Hoja "Preferencias" en la planilla de administración (se crea sola): una
+ * fila por usuario. Usa funciones de Code.gs: getAdminSpreadsheet,
+ * canonicalUserName, jsonResponse y errorResponse.
+ */
+
+const PREFERENCIAS_SHEET_NAME = 'Preferencias';
+const PREFERENCIAS_HEADERS = ['Usuario', 'Ambientación', 'Animación al ingresar', 'Actualizado'];
+const PREFERENCIAS_AMBIENTES = [
+  'ninguna', 'automatica',
+  'navidad', 'anio-nuevo', 'semana-santa', 'independencia', 'san-juan',
+  'verano', 'otono', 'invierno', 'primavera'
+];
+const PREFERENCIAS_DEFAULT = { ambientacion: 'ninguna', animacion: true };
+
+function ensurePreferenciasSheet() {
+  const ss = getAdminSpreadsheet();
+  let sheet = ss.getSheetByName(PREFERENCIAS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(PREFERENCIAS_SHEET_NAME);
+    sheet.getRange(1, 1, sheet.getMaxRows(), PREFERENCIAS_HEADERS.length).setNumberFormat('@');
+    sheet.getRange(1, 1, 1, PREFERENCIAS_HEADERS.length).setValues([PREFERENCIAS_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function preferenciasLeerFila_(sheet, sessionUser) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const usuario = canonicalUserName(sessionUser);
+  const values = sheet.getRange(2, 1, lastRow - 1, PREFERENCIAS_HEADERS.length).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (canonicalUserName(values[i][0]) === usuario) {
+      const ambientacion = String(values[i][1] || '').trim().toLowerCase();
+      const animacion = String(values[i][2]).trim().toLowerCase();
+      return {
+        fila: i + 2,
+        ambientacion: PREFERENCIAS_AMBIENTES.indexOf(ambientacion) >= 0 ? ambientacion : PREFERENCIAS_DEFAULT.ambientacion,
+        animacion: !(animacion === 'no' || animacion === 'false')
+      };
+    }
+  }
+  return null;
+}
+
+function handlePreferenciasObtener(sessionUser) {
+  const sheet = ensurePreferenciasSheet();
+  const fila = preferenciasLeerFila_(sheet, sessionUser);
+  return jsonResponse({
+    ok: true,
+    ambientacion: fila ? fila.ambientacion : PREFERENCIAS_DEFAULT.ambientacion,
+    animacion: fila ? fila.animacion : PREFERENCIAS_DEFAULT.animacion
+  });
+}
+
+// body.ambientacion y/o body.animacion (true/false). Cada usuario sólo
+// cambia las suyas.
+function handlePreferenciasGuardar(body, sessionUser) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return errorResponse('Las preferencias están ocupadas, intentá de nuevo', 'PREFERENCIAS_LOCK_TIMEOUT');
+  }
+  try {
+    const sheet = ensurePreferenciasSheet();
+    const actual = preferenciasLeerFila_(sheet, sessionUser);
+    let ambientacion = actual ? actual.ambientacion : PREFERENCIAS_DEFAULT.ambientacion;
+    let animacion = actual ? actual.animacion : PREFERENCIAS_DEFAULT.animacion;
+    if (body.ambientacion !== undefined) {
+      const pedido = String(body.ambientacion || '').trim().toLowerCase();
+      if (PREFERENCIAS_AMBIENTES.indexOf(pedido) < 0) {
+        return errorResponse('Ambientación no válida', 'PREFERENCIA_AMBIENTACION');
+      }
+      ambientacion = pedido;
+    }
+    if (body.animacion !== undefined) animacion = body.animacion === true || body.animacion === 'true';
+
+    const fila = [String(sessionUser), ambientacion, animacion ? 'Sí' : 'No', new Date().toISOString()];
+    const destino = sheet.getRange(actual ? actual.fila : sheet.getLastRow() + 1, 1, 1, PREFERENCIAS_HEADERS.length);
+    destino.setNumberFormat('@');
+    destino.setValues([fila]);
+    return jsonResponse({ ok: true, ambientacion: ambientacion, animacion: animacion });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── PREFERENCIAS DEL EQUIPO ─────────────────────────────────────────────
+const EQUIPO_EXCLUIDOS_PROPERTY = 'EQUIPO_EXCLUIDOS_ASIGNACION';
+const EQUIPO_MAX_EXCLUIDOS = 50;
+
+function equipoLeerExcluidos_() {
+  try {
+    const lista = JSON.parse(PropertiesService.getScriptProperties().getProperty(EQUIPO_EXCLUIDOS_PROPERTY) || '[]');
+    return Array.isArray(lista) ? lista.filter(function (n) { return typeof n === 'string' && n.trim(); }) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function handlePreferenciasEquipoObtener() {
+  return jsonResponse({ ok: true, excluidosAsignacion: equipoLeerExcluidos_() });
+}
+
+// body.excluidosAsignacion: lista completa de nombres excluidos.
+function handlePreferenciasEquipoGuardar(body, sessionUser, sessionRole) {
+  const rol = String(sessionRole || '').toUpperCase();
+  if (rol !== 'ADMINISTRADOR' && rol !== 'SUPERUSUARIO') {
+    return errorResponse('Sólo un ADMINISTRADOR o SUPERUSUARIO puede excluir personas de la asignación.', 'EQUIPO_SIN_PERMISO');
+  }
+  if (!Array.isArray(body.excluidosAsignacion) || body.excluidosAsignacion.length > EQUIPO_MAX_EXCLUIDOS) {
+    return errorResponse('Lista de excluidos inválida.', 'EQUIPO_LISTA_INVALIDA');
+  }
+  const vistos = {};
+  const lista = [];
+  body.excluidosAsignacion.forEach(function (n) {
+    const nombre = String(n || '').trim().slice(0, 80);
+    const clave = canonicalUserName(nombre);
+    if (nombre && !vistos[clave]) {
+      vistos[clave] = true;
+      lista.push(nombre);
+    }
+  });
+  PropertiesService.getScriptProperties().setProperty(EQUIPO_EXCLUIDOS_PROPERTY, JSON.stringify(lista));
+  return jsonResponse({ ok: true, excluidosAsignacion: lista });
+}
+
+function handlePreferenciasAction(action, body, sessionUser, sessionRole) {
+  const routes = {
+    preferenciasObtener: [function () { return handlePreferenciasObtener(sessionUser); }, 'PREFERENCIAS_OBTENER_ERROR'],
+    preferenciasGuardar: [function () { return handlePreferenciasGuardar(body, sessionUser); }, 'PREFERENCIAS_GUARDAR_ERROR'],
+    preferenciasEquipoObtener: [function () { return handlePreferenciasEquipoObtener(); }, 'EQUIPO_OBTENER_ERROR'],
+    preferenciasEquipoGuardar: [function () { return handlePreferenciasEquipoGuardar(body, sessionUser, sessionRole); }, 'EQUIPO_GUARDAR_ERROR']
+  };
+  const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
+  if (!route) return null;
+  try {
+    return route[0]();
+  } catch (err) {
+    return errorResponse(err.message, route[1]);
+  }
+}
+
+// ===== AppsScript-Libros.gs =====
+/**
+ * MÓDULO LIBROS IVA - archivo aparte del backend de Control Clientes.
+ *
+ * Guarda los libros de COMPRAS y VENTAS que se exportan de SIGA (Excel) e
+ * importan desde la app, uno por cliente + mes + tipo, para consultarlos
+ * después. La app lee el Excel y manda los comprobantes ya ordenados.
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Libros" y pegar
+ *      este contenido completo.
+ *   2. No hace falta tocar Code.gs: las acciones libros* llegan por
+ *      handleAvisosAction (AppsScript-Avisos.gs), que ya está en doPost.
+ *   3. Implementar > Administrar implementaciones > editar > Nueva versión.
+ *
+ * Hoja "Libros IVA" en la planilla de administración (se crea sola): una fila
+ * por libro. Las columnas 1 a 10 son el índice; el detalle de comprobantes
+ * (JSON) va desde la columna 11 repartido en celdas de hasta 45.000
+ * caracteres (Google admite 50.000 por celda).
+ * Todos los usuarios ven e importan; sólo ADMINISTRADOR y SUPERUSUARIO borran.
+ * Usa funciones de Code.gs: getAdminSpreadsheet, normalizeRole, jsonResponse
+ * y errorResponse.
+ */
+
+const LIBROS_SHEET_NAME = 'Libros IVA';
+const LIBROS_HEADERS = [
+  'ID', 'Tipo', 'RUC cliente', 'Cliente', 'Período', 'Archivo', 'Comprobantes',
+  'Totales', 'Importado por', 'Importado el'
+];
+const LIBROS_COL_DATOS = LIBROS_HEADERS.length + 1; // 11
+const LIBROS_TROZO = 45000;
+const LIBROS_MAX_COMPROBANTES = 5000;
+const LIBROS_MAX_JSON = 2 * 1000 * 1000; // ~2 MB de detalle por libro
+const LIBROS_TIPOS = ['compras', 'ventas'];
+
+function ensureLibrosSheet() {
+  const ss = getAdminSpreadsheet();
+  let sheet = ss.getSheetByName(LIBROS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(LIBROS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, LIBROS_HEADERS.length).setValues([LIBROS_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function librosEsAdmin_(sessionRole) {
+  const rol = normalizeRole(sessionRole);
+  return rol === 'ADMINISTRADOR' || rol === 'SUPERUSUARIO';
+}
+
+function librosTexto_(v, max) {
+  if (v instanceof Date) return v.toISOString();
+  return String(v === null || v === undefined ? '' : v).trim().slice(0, max || 500);
+}
+
+// Índice de todos los libros (sin el detalle).
+function librosLeerIndice_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, LIBROS_HEADERS.length).getValues();
+  const out = [];
+  values.forEach(function (r, i) {
+    const id = librosTexto_(r[0], 80);
+    if (!id) return;
+    let totales = {};
+    try { totales = JSON.parse(String(r[7] || '{}')) || {}; } catch (e) { totales = {}; }
+    out.push({
+      fila: i + 2,
+      id: id,
+      tipo: librosTexto_(r[1], 20),
+      ruc: librosTexto_(r[2], 30).replace(/\D/g, ''),
+      cliente: librosTexto_(r[3], 200),
+      periodo: librosTexto_(r[4], 10),
+      archivo: librosTexto_(r[5], 200),
+      cantidad: Number(r[6]) || 0,
+      totales: totales,
+      importadoPor: librosTexto_(r[8], 120),
+      importadoEl: librosTexto_(r[9], 40)
+    });
+  });
+  return out;
+}
+
+function librosPublico_(l) {
+  return {
+    id: l.id, tipo: l.tipo, ruc: l.ruc, cliente: l.cliente, periodo: l.periodo,
+    archivo: l.archivo, cantidad: l.cantidad, totales: l.totales,
+    importadoPor: l.importadoPor, importadoEl: l.importadoEl
+  };
+}
+
+// body.ruc opcional: sólo los libros de ese cliente.
+function handleLibrosListar(body) {
+  const ruc = librosTexto_(body.ruc, 30).replace(/\D/g, '');
+  const lista = librosLeerIndice_(ensureLibrosSheet())
+    .filter(function (l) { return !ruc || l.ruc === ruc; })
+    .map(librosPublico_);
+  return jsonResponse({ ok: true, libros: lista });
+}
+
+function handleLibrosLeer(body) {
+  const id = librosTexto_(body.id, 80);
+  const sheet = ensureLibrosSheet();
+  const libro = librosLeerIndice_(sheet).filter(function (l) { return l.id === id; })[0];
+  if (!libro) return errorResponse('No se encontró ese libro', 'LIBRO_NO_EXISTE');
+  const ancho = Math.max(sheet.getLastColumn() - LIBROS_COL_DATOS + 1, 1);
+  const trozos = sheet.getRange(libro.fila, LIBROS_COL_DATOS, 1, ancho).getValues()[0];
+  let datos = null;
+  try { datos = JSON.parse(trozos.map(function (t) { return String(t || ''); }).join('')); } catch (e) { datos = null; }
+  if (!datos) return errorResponse('El detalle de ese libro está dañado: volvé a importarlo', 'LIBRO_DANADO');
+  const out = librosPublico_(libro);
+  out.datos = datos;
+  return jsonResponse({ ok: true, libro: out });
+}
+
+// body: { tipo, ruc, cliente, periodo, archivo, totales, datos, reemplazar }
+// datos = { columnas: [...], filas: [[...], ...] } tal como lo arma la app.
+function handleLibrosGuardar(body, sessionUser) {
+  const tipo = librosTexto_(body.tipo, 20).toLowerCase();
+  if (LIBROS_TIPOS.indexOf(tipo) < 0) return errorResponse('Tipo de libro no válido', 'LIBRO_TIPO');
+  const ruc = librosTexto_(body.ruc, 30).replace(/\D/g, '');
+  if (!ruc) return errorResponse('Elegí el cliente del libro', 'LIBRO_CLIENTE');
+  const periodo = librosTexto_(body.periodo, 10);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) return errorResponse('Mes o año no válido', 'LIBRO_PERIODO');
+  const datos = body.datos;
+  if (!datos || !Array.isArray(datos.columnas) || !Array.isArray(datos.filas)) {
+    return errorResponse('El libro no tiene comprobantes', 'LIBRO_VACIO');
+  }
+  if (datos.filas.length > LIBROS_MAX_COMPROBANTES) {
+    return errorResponse('El libro tiene demasiados comprobantes (máximo ' + LIBROS_MAX_COMPROBANTES + ')', 'LIBRO_GRANDE');
+  }
+  const json = JSON.stringify({ columnas: datos.columnas, filas: datos.filas, resumen: Array.isArray(datos.resumen) ? datos.resumen : [] });
+  if (json.length > LIBROS_MAX_JSON) return errorResponse('El libro es demasiado grande', 'LIBRO_GRANDE');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return errorResponse('Los libros están ocupados, intentá de nuevo', 'LIBROS_LOCK_TIMEOUT');
+  try {
+    const sheet = ensureLibrosSheet();
+    const existente = librosLeerIndice_(sheet).filter(function (l) {
+      return l.tipo === tipo && l.ruc === ruc && l.periodo === periodo;
+    })[0];
+    if (existente && body.reemplazar !== true) {
+      return jsonResponse({ ok: false, code: 'LIBRO_EXISTE', error: 'Ya hay un libro cargado para ese cliente y mes', existente: librosPublico_(existente) });
+    }
+    const id = existente ? existente.id : 'lb-' + Utilities.getUuid();
+    const fila = existente ? existente.fila : sheet.getLastRow() + 1;
+    const indice = [
+      id, tipo, ruc, librosTexto_(body.cliente, 200), periodo, librosTexto_(body.archivo, 200),
+      String(datos.filas.length), JSON.stringify(body.totales || {}).slice(0, 5000),
+      String(sessionUser), new Date().toISOString()
+    ];
+    const trozos = [];
+    for (let i = 0; i < json.length; i += LIBROS_TROZO) trozos.push(json.slice(i, i + LIBROS_TROZO));
+    // Al reemplazar se limpian los trozos viejos que sobren.
+    const anchoViejo = Math.max(sheet.getLastColumn() - LIBROS_COL_DATOS + 1, 0);
+    if (existente && anchoViejo > 0) sheet.getRange(fila, LIBROS_COL_DATOS, 1, anchoViejo).clearContent();
+    const todo = indice.concat(trozos);
+    const rango = sheet.getRange(fila, 1, 1, todo.length);
+    rango.setNumberFormat('@'); // texto: Sheets no convierte números ni fechas
+    rango.setValues([todo.map(function (v) { return String(v); })]);
+    return jsonResponse({ ok: true, id: id, reemplazado: !!existente });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleLibrosEliminar(body, sessionRole) {
+  if (!librosEsAdmin_(sessionRole)) return errorResponse('Sólo un administrador puede eliminar libros', 'FORBIDDEN');
+  const id = librosTexto_(body.id, 80);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return errorResponse('Los libros están ocupados, intentá de nuevo', 'LIBROS_LOCK_TIMEOUT');
+  try {
+    const sheet = ensureLibrosSheet();
+    const libro = librosLeerIndice_(sheet).filter(function (l) { return l.id === id; })[0];
+    if (!libro) return errorResponse('No se encontró ese libro', 'LIBRO_NO_EXISTE');
+    sheet.deleteRow(libro.fila);
+    return jsonResponse({ ok: true });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleLibrosAction(action, body, sessionUser, sessionRole) {
+  const routes = {
+    librosListar: [function () { return handleLibrosListar(body); }, 'LIBROS_LISTAR_ERROR'],
+    librosLeer: [function () { return handleLibrosLeer(body); }, 'LIBROS_LEER_ERROR'],
+    librosGuardar: [function () { return handleLibrosGuardar(body, sessionUser); }, 'LIBROS_GUARDAR_ERROR'],
+    librosEliminar: [function () { return handleLibrosEliminar(body, sessionRole); }, 'LIBROS_ELIMINAR_ERROR']
+  };
+  const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
+  if (!route) return null;
+  try {
+    return route[0]();
+  } catch (err) {
+    return errorResponse(err.message, route[1]);
+  }
+}
+
+// ===== AppsScript-Agente.gs =====
+/**
+ * MÓDULO ASISTENTE (IA) — archivo aparte del backend.
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Agente" y pegar este
+ *      contenido completo.
+ *   2. Pegar también la versión nueva de AppsScript-Avisos.gs: su router ya
+ *      deriva acá las acciones que empiezan con "agente" y "whaticket" (estas
+ *      últimas siguen a AppsScript-Whaticket.gs), así que NO hace falta tocar
+ *      doPost.
+ *   3. Configuración del proyecto > Propiedades de la secuencia de comandos:
+ *        ANTHROPIC_API_KEY        clave de console.anthropic.com (obligatoria
+ *                                 para el asistente).
+ *        AGENTE_MODELO            opcional. Por defecto "claude-haiku-5-5".
+ *        AGENTE_ESFUERZO          opcional. low | medium | high (por
+ *                                 defecto medium).
+ *        AGENTE_LIMITE_DIARIO     opcional. Consultas a la IA por usuario y
+ *                                 por día. Por defecto 200.
+ *   4. Implementar > Administrar implementaciones > editar > Nueva versión.
+ *
+ * La clave de la IA vive SÓLO acá (Script Properties): nunca se manda al
+ * navegador ni va en el .env de Vite.
+ *
+ * Diseño del asistente: este archivo es un intermediario seguro hacia la API
+ * de Claude. Las herramientas del asistente (buscar clientes, ver el IVA...)
+ * corren en la app, con los mismos datos y permisos que ya ve el usuario;
+ * acá se valida la sesión, se fija el modelo y el tope de respuesta, se
+ * controla el límite diario y se registra el consumo en la hoja "Agente Uso".
+ *
+ * Usa funciones de Code.gs: getAdminSpreadsheet, jsonResponse, errorResponse.
+ */
+
+const AGENTE_API_URL = 'https://api.anthropic.com/v1/messages';
+const AGENTE_API_VERSION = '2023-06-01';
+const AGENTE_MODELO_DEFAULT = 'claude-haiku-5-5';
+// Incluye el "pensamiento" del modelo (Haiku 5.5 piensa por defecto) más la
+// respuesta. El texto final suele ser corto; el tope sólo evita excesos.
+const AGENTE_MAX_TOKENS = 4000;
+// Esfuerzo del modelo: low | medium | high. "medium" equilibra calidad y costo.
+const AGENTE_ESFUERZO_DEFAULT = 'medium';
+const AGENTE_LIMITE_DIARIO_DEFAULT = 200;
+const AGENTE_MAX_PAYLOAD_CHARS = 400000;
+const AGENTE_MAX_MENSAJES = 80;
+const AGENTE_MAX_HERRAMIENTAS = 20;
+const AGENTE_USO_SHEET_NAME = 'Agente Uso';
+const AGENTE_CUENTA_PROPERTY = 'AGENTE_CUENTA_DIARIA';
+
+// Precios en USD por millón de tokens (entrada, salida, lectura de caché,
+// escritura de caché) para estimar el costo en la hoja de uso. Si se cambia
+// AGENTE_MODELO a uno que no está acá, el costo queda en blanco.
+const AGENTE_PRECIOS = {
+  'claude-haiku-5-5': { in: 0.10, out: 0.50, cacheRead: 0.01, cacheWrite: 0.125 },
+  'claude-sonnet-5-5': { in: 2, out: 10, cacheRead: 0.10, cacheWrite: 2.5 },
+  'claude-opus-5-5': { in: 4, out: 20, cacheRead: 0.20, cacheWrite: 5 }
+};
+
+// ── CONFIGURACIÓN ───────────────────────────────────────────────────────
+function agenteProp(name) {
+  return String(PropertiesService.getScriptProperties().getProperty(name) || '').trim();
+}
+
+function agenteConfig() {
+  const limite = parseInt(agenteProp('AGENTE_LIMITE_DIARIO'), 10);
+  const esfuerzo = agenteProp('AGENTE_ESFUERZO').toLowerCase();
+  return {
+    apiKey: agenteProp('ANTHROPIC_API_KEY'),
+    modelo: agenteProp('AGENTE_MODELO') || AGENTE_MODELO_DEFAULT,
+    esfuerzo: /^(low|medium|high)$/.test(esfuerzo) ? esfuerzo : AGENTE_ESFUERZO_DEFAULT,
+    limiteDiario: limite > 0 ? limite : AGENTE_LIMITE_DIARIO_DEFAULT
+  };
+}
+
+function hoyIso() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Asuncion', 'yyyy-MM-dd');
+}
+
+function ensureLogSheet(name, headers) {
+  const ss = getAdminSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// ── LÍMITE DIARIO POR USUARIO ───────────────────────────────────────────
+// Un solo JSON en Script Properties con la fecha y el contador de cada
+// usuario; al cambiar el día se reinicia.
+function leerCuentaDiaria() {
+  const hoy = hoyIso();
+  let data = null;
+  try {
+    data = JSON.parse(agenteProp(AGENTE_CUENTA_PROPERTY) || 'null');
+  } catch (err) {
+    data = null;
+  }
+  if (!data || data.fecha !== hoy || typeof data.usuarios !== 'object') {
+    data = { fecha: hoy, usuarios: {} };
+  }
+  return data;
+}
+
+function usadasHoy(sessionUser) {
+  return Number(leerCuentaDiaria().usuarios[sessionUser]) || 0;
+}
+
+// Suma una consulta si todavía hay cupo. Devuelve false si se alcanzó el límite.
+function reservarConsulta(sessionUser, limite) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('El servidor está ocupado, probá de nuevo en unos segundos');
+  try {
+    const data = leerCuentaDiaria();
+    const actual = Number(data.usuarios[sessionUser]) || 0;
+    if (actual >= limite) return false;
+    data.usuarios[sessionUser] = actual + 1;
+    PropertiesService.getScriptProperties().setProperty(AGENTE_CUENTA_PROPERTY, JSON.stringify(data));
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── VALIDACIÓN DEL PEDIDO ───────────────────────────────────────────────
+// Sólo se reenvía a la API lo que hace falta y con la forma esperada: el
+// modelo, el tope de respuesta y el resto de los parámetros los fija el
+// servidor, no el navegador.
+// Lo que escribe la persona (o la app con resultados de herramientas) y lo que
+// devolvió el modelo. Los bloques de "pensamiento" (thinking y
+// redacted_thinking) los genera Haiku 5.5 por defecto y la API exige que
+// vuelvan tal cual en la conversación con herramientas.
+const AGENTE_BLOQUES_PERMITIDOS = {
+  user: { text: true, tool_result: true },
+  assistant: { text: true, tool_use: true, thinking: true, redacted_thinking: true }
+};
+
+function limpiarSystem(system) {
+  if (typeof system === 'string') return system.slice(0, 60000);
+  if (!Array.isArray(system)) throw new Error('Instrucciones del asistente inválidas');
+  return system.slice(0, 4).map(function (b) {
+    if (!b || b.type !== 'text' || typeof b.text !== 'string') throw new Error('Instrucciones del asistente inválidas');
+    return { type: 'text', text: b.text.slice(0, 60000) };
+  });
+}
+
+function limpiarHerramientas(tools) {
+  if (tools === undefined || tools === null) return [];
+  if (!Array.isArray(tools) || tools.length > AGENTE_MAX_HERRAMIENTAS) throw new Error('Herramientas inválidas');
+  return tools.map(function (t) {
+    if (!t || typeof t.name !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(t.name) ||
+        typeof t.input_schema !== 'object' || t.input_schema === null) {
+      throw new Error('Herramienta inválida');
+    }
+    return { name: t.name, description: String(t.description || '').slice(0, 4000), input_schema: t.input_schema };
+  });
+}
+
+function limpiarMensajes(messages) {
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > AGENTE_MAX_MENSAJES) {
+    throw new Error('Conversación inválida o demasiado larga: empezá una nueva');
+  }
+  return messages.map(function (m) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant')) throw new Error('Mensaje inválido');
+    if (typeof m.content === 'string') return { role: m.role, content: m.content };
+    if (!Array.isArray(m.content)) throw new Error('Mensaje inválido');
+    const permitidos = AGENTE_BLOQUES_PERMITIDOS[m.role];
+    m.content.forEach(function (b) {
+      if (!b || !permitidos[b.type]) throw new Error('Tipo de contenido no permitido (' + (b && b.type) + ')');
+    });
+    return { role: m.role, content: m.content };
+  });
+}
+
+// ── LLAMADA A LA API DE CLAUDE ──────────────────────────────────────────
+function handleAgenteMensaje(body, sessionUser) {
+  const cfg = agenteConfig();
+  if (!cfg.apiKey) {
+    return errorResponse('El asistente no está configurado: falta ANTHROPIC_API_KEY en las propiedades del Apps Script.', 'AGENTE_SIN_CLAVE');
+  }
+
+  const payload = {
+    model: cfg.modelo,
+    max_tokens: AGENTE_MAX_TOKENS,
+    output_config: { effort: cfg.esfuerzo },
+    // Caché automático: las instrucciones, las herramientas y lo ya hablado
+    // se cobran ~10 veces más barato en las consultas siguientes.
+    cache_control: { type: 'ephemeral' },
+    system: limpiarSystem(body.system),
+    messages: limpiarMensajes(body.messages)
+  };
+  const tools = limpiarHerramientas(body.tools);
+  if (tools.length) payload.tools = tools;
+
+  const json = JSON.stringify(payload);
+  if (json.length > AGENTE_MAX_PAYLOAD_CHARS) {
+    return errorResponse('La conversación quedó muy larga. Empezá una nueva con el botón «Nueva».', 'AGENTE_MUY_LARGO');
+  }
+
+  if (!reservarConsulta(sessionUser, cfg.limiteDiario)) {
+    return errorResponse('Llegaste al límite de ' + cfg.limiteDiario + ' consultas al asistente por hoy. Mañana se renueva.', 'AGENTE_LIMITE');
+  }
+
+  const resp = UrlFetchApp.fetch(AGENTE_API_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-api-key': cfg.apiKey, 'anthropic-version': AGENTE_API_VERSION },
+    payload: json,
+    muteHttpExceptions: true
+  });
+
+  const status = resp.getResponseCode();
+  let data = null;
+  try {
+    data = JSON.parse(resp.getContentText());
+  } catch (err) {
+    data = null;
+  }
+
+  if (status < 200 || status >= 300 || !data) {
+    const detalle = data && data.error && data.error.message ? data.error.message : ('HTTP ' + status);
+    registrarUsoAgente(sessionUser, cfg.modelo, null, 'Error: ' + detalle);
+    const mensaje = status === 429 || status === 529
+      ? 'El servicio de IA está saturado en este momento. Probá de nuevo en un minuto.'
+      : status === 401
+        ? 'La clave de la IA no es válida. Avisale al administrador.'
+        : (status === 400 && /credit|balance/i.test(detalle))
+          ? 'La cuenta de la IA se quedó sin saldo. Avisale al administrador.'
+          : 'No se pudo consultar a la IA (' + detalle + ').';
+    return errorResponse(mensaje, 'AGENTE_API_ERROR');
+  }
+
+  registrarUsoAgente(sessionUser, cfg.modelo, data.usage, '');
+  return jsonResponse({
+    ok: true,
+    content: data.content || [],
+    stop_reason: data.stop_reason || '',
+    usage: data.usage || null
+  });
+}
+
+function costoEstimado(modelo, usage) {
+  const p = AGENTE_PRECIOS[modelo];
+  if (!p || !usage) return '';
+  const m = 1000000;
+  const total =
+    (Number(usage.input_tokens) || 0) * p.in / m +
+    (Number(usage.output_tokens) || 0) * p.out / m +
+    (Number(usage.cache_read_input_tokens) || 0) * p.cacheRead / m +
+    (Number(usage.cache_creation_input_tokens) || 0) * p.cacheWrite / m;
+  return Math.round(total * 1000000) / 1000000;
+}
+
+function registrarUsoAgente(sessionUser, modelo, usage, nota) {
+  try {
+    const sheet = ensureLogSheet(AGENTE_USO_SHEET_NAME, [
+      'Fecha', 'Usuario', 'Modelo', 'Entrada', 'Salida', 'Caché leída', 'Caché escrita', 'Costo USD (estimado)', 'Nota'
+    ]);
+    const u = usage || {};
+    sheet.appendRow([
+      new Date(), sessionUser, modelo,
+      Number(u.input_tokens) || 0, Number(u.output_tokens) || 0,
+      Number(u.cache_read_input_tokens) || 0, Number(u.cache_creation_input_tokens) || 0,
+      costoEstimado(modelo, usage), nota || ''
+    ]);
+  } catch (err) {
+    // El registro es informativo: si falla, la respuesta igual llega.
+  }
+}
+
+// ── ESTADO (qué está configurado) ───────────────────────────────────────
+function handleAgenteEstado(sessionUser) {
+  const cfg = agenteConfig();
+  // AppsScript-Whaticket.gs es opcional: si no está, Whaticket queda apagado.
+  const wt = typeof whaticketEstado === 'function' ? whaticketEstado() : { activo: false, grupo: false };
+  return jsonResponse({
+    ok: true,
+    agente: {
+      activo: Boolean(cfg.apiKey),
+      modelo: cfg.modelo,
+      limiteDiario: cfg.limiteDiario,
+      usadasHoy: usadasHoy(sessionUser)
+    },
+    whaticket: wt
+  });
+}
+
+// ── PRUEBA MANUAL DESDE EL EDITOR ───────────────────────────────────────
+// Ejecutar a mano para verificar la clave de la IA sin pasar por la app.
+function probarAsistente() {
+  const cfg = agenteConfig();
+  if (!cfg.apiKey) throw new Error('Falta ANTHROPIC_API_KEY en las propiedades del script');
+  const resp = UrlFetchApp.fetch(AGENTE_API_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-api-key': cfg.apiKey, 'anthropic-version': AGENTE_API_VERSION },
+    payload: JSON.stringify({
+      model: cfg.modelo,
+      max_tokens: 50,
+      messages: [{ role: 'user', content: 'Respondé sólo: "Asistente de Sistema MJ funcionando".' }]
+    }),
+    muteHttpExceptions: true
+  });
+  Logger.log('HTTP ' + resp.getResponseCode() + ': ' + resp.getContentText());
+}
+
+// ── RUTEO ───────────────────────────────────────────────────────────────
+// Lo llama handleAvisosAction (AppsScript-Avisos.gs) para las acciones que
+// empiezan con "agente" o "whaticket" (éstas pasan a AppsScript-Whaticket.gs).
+// Devuelve null si no es de acá.
+function handleAgenteAction(action, body, sessionUser, sessionRole) {
+  if (String(action).indexOf('whaticket') === 0) {
+    return typeof handleWhaticketAction === 'function'
+      ? handleWhaticketAction(action, body, sessionUser, sessionRole)
+      : errorResponse('Falta el archivo Whaticket en el Apps Script.', 'WHATICKET_SIN_MODULO');
+  }
+  const routes = {
+    agenteEstado: [function () { return handleAgenteEstado(sessionUser); }, 'AGENTE_ESTADO_ERROR'],
+    agenteMensaje: [function () { return handleAgenteMensaje(body, sessionUser); }, 'AGENTE_ERROR']
+  };
+  const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
+  if (!route) return null;
+  try {
+    return route[0]();
+  } catch (err) {
+    return errorResponse(err.message, route[1]);
+  }
+}
+
+// ===== AppsScript-Whaticket.gs =====
+/**
+ * MÓDULO WHATICKET — envío de fichas IVA y chat del cliente dentro de Sistema MJ.
+ *
+ * Usa la API oficial de Whaticket (https://api.whaticket.com/api/v1, la de
+ * Integraciones → Documentación del panel).
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Whaticket" y pegar
+ *      este contenido completo. Necesita también el archivo "Agente"
+ *      (AppsScript-Agente.gs), que es el que recibe las acciones "whaticket*"
+ *      desde el router de Avisos.
+ *   2. En Whaticket: Integraciones → Tokens → Nuevo token, con permisos
+ *        tickets:view, tickets:viewAll, tickets:viewPending,
+ *        campaigns:create, campaigns:start y connections:view.
+ *   3. Configuración del proyecto > Propiedades de la secuencia de comandos:
+ *        WHATICKET_TOKEN         la clave del token (obligatoria).
+ *        WHATICKET_GRUPO_NOMBRE  nombre exacto del grupo contable de WhatsApp,
+ *                                como aparece en Whaticket.
+ *        WHATICKET_CONEXION_ID   opcional. Si hay más de una conexión de
+ *                                WhatsApp; si no, se detecta sola.
+ *        WHATICKET_COLA_ID       opcional. Cola donde se abren los chats nuevos.
+ *        WHATICKET_USUARIO_ID    opcional. Usuario de Whaticket al que se
+ *                                asignan los chats nuevos.
+ *        WHATICKET_URL           opcional. Por defecto la API oficial.
+ *   4. Ejecutar "probarWhaticket" desde el editor y revisar el registro.
+ *   5. Implementar > Administrar implementaciones > editar > Nueva versión.
+ *
+ * Cómo se envía la ficha a un cliente:
+ *   - Si el cliente escribió en los últimos 7 días, va a su chat existente
+ *     (POST /tickets/{id}/messages): no consume créditos y queda en el hilo.
+ *   - Si no, Whaticket sólo permite escribirle con un mensaje nuevo
+ *     (POST /messages, que funciona como una campaña de un mensaje y puede
+ *     consumir créditos del plan).
+ * Al grupo contable siempre se le escribe en su chat; Whaticket exige que
+ * alguien haya escrito en el grupo en los últimos 7 días.
+ *
+ * El token vive SÓLO acá (Script Properties): nunca llega al navegador.
+ * Usa funciones de Code.gs: getAdminSpreadsheet, jsonResponse, errorResponse.
+ */
+
+const WT_URL_DEFAULT = 'https://api.whaticket.com/api/v1';
+const WT_VENTANA_MS = 7 * 24 * 60 * 60 * 1000;
+const WT_MARGEN_VENTANA_MS = 30 * 60 * 1000; // no apurar el límite de 7 días
+const WT_LOG_SHEET_NAME = 'Whaticket Envíos';
+const WT_MAX_TEXTO = 4000;
+const WT_MAX_IMAGEN_CHARS = 8 * 1024 * 1024; // base64 (~6 MB de PNG)
+const WT_DUPLICADO_SEGUNDOS = 90;
+const WT_CAMPANA_NOMBRE = 'Sistema MJ - Fichas IVA';
+const WT_GRUPO_CACHE_PROPERTY = 'WHATICKET_GRUPO_DETECTADO';
+
+// ── CONFIGURACIÓN ───────────────────────────────────────────────────────
+function wtProp(name) {
+  return String(PropertiesService.getScriptProperties().getProperty(name) || '').trim();
+}
+
+function wtConfig() {
+  return {
+    url: (wtProp('WHATICKET_URL') || WT_URL_DEFAULT).replace(/\/+$/, ''),
+    token: wtProp('WHATICKET_TOKEN'),
+    conexionId: wtProp('WHATICKET_CONEXION_ID'),
+    grupoNombre: wtProp('WHATICKET_GRUPO_NOMBRE'),
+    grupoTicketId: wtProp('WHATICKET_GRUPO_TICKET_ID'),
+    colaId: wtProp('WHATICKET_COLA_ID'),
+    usuarioId: wtProp('WHATICKET_USUARIO_ID')
+  };
+}
+
+// Lo usa handleAgenteEstado para que la app sepa qué botones mostrar.
+function whaticketEstado() {
+  const cfg = wtConfig();
+  return {
+    activo: Boolean(cfg.token),
+    grupo: Boolean(cfg.token && (cfg.grupoNombre || cfg.grupoTicketId))
+  };
+}
+
+// ── LLAMADAS A LA API ───────────────────────────────────────────────────
+function wtError(mensaje, codigo, status) {
+  const err = new Error(mensaje);
+  err.wtCodigo = codigo || '';
+  err.wtStatus = status || 0;
+  return err;
+}
+
+function wtCodigoDe(data) {
+  if (!data) return '';
+  return String(data.error || data.code || data.message || data.mensagem || '');
+}
+
+function wtMensajeError(status, codigo) {
+  if (/REPLY_WINDOW_CLOSED/i.test(codigo)) {
+    return 'Ese chat no tuvo mensajes del contacto en los últimos 7 días, y Whaticket no deja responder ahí.';
+  }
+  if (status === 401) return 'Whaticket rechazó el token. Revisá WHATICKET_TOKEN.';
+  if (status === 403) return 'Al token de Whaticket le faltan permisos (' + (codigo || 'sin detalle') + '). Revisá los permisos del token.';
+  if (status === 404) return 'Whaticket no encontró lo pedido (' + (codigo || 'sin detalle') + ').';
+  if (status === 429) return 'Whaticket recibió demasiados pedidos seguidos. Probá en un minuto.';
+  return 'Whaticket respondió con un error (HTTP ' + status + (codigo ? ': ' + codigo : '') + ').';
+}
+
+function wtQuery(query) {
+  if (!query) return '';
+  const partes = Object.keys(query)
+    .filter(function (k) { return query[k] !== undefined && query[k] !== null && query[k] !== ''; })
+    .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(query[k])); });
+  return partes.length ? '?' + partes.join('&') : '';
+}
+
+// opciones: { query, json, form }
+function wtRequest(method, path, opciones) {
+  const cfg = wtConfig();
+  if (!cfg.token) throw wtError('Whaticket no está configurado: falta WHATICKET_TOKEN en las propiedades del Apps Script.', 'SIN_TOKEN');
+  const o = opciones || {};
+  const params = {
+    method: method,
+    headers: { Authorization: 'Bearer ' + cfg.token, Accept: 'application/json' },
+    muteHttpExceptions: true
+  };
+  if (o.json !== undefined) {
+    params.contentType = 'application/json';
+    params.payload = JSON.stringify(o.json);
+  } else if (o.form) {
+    params.payload = o.form; // con un blob adentro Apps Script arma multipart/form-data
+  }
+  let resp;
+  try {
+    resp = UrlFetchApp.fetch(cfg.url + path + wtQuery(o.query), params);
+  } catch (err) {
+    throw wtError('No se pudo conectar con Whaticket: ' + err.message, 'CONEXION');
+  }
+  const status = resp.getResponseCode();
+  const texto = resp.getContentText() || '';
+  let data = {};
+  try {
+    data = texto ? JSON.parse(texto) : {};
+  } catch (err) {
+    data = { raw: texto.slice(0, 300) };
+  }
+  if (status < 200 || status >= 300) {
+    const codigo = wtCodigoDe(data);
+    throw wtError(wtMensajeError(status, codigo), codigo, status);
+  }
+  return data;
+}
+
+function wtSoloDigitos(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+
+// Compara números tolerando prefijos distintos (595981… / 0981… / 981…).
+function wtMismoNumero(a, b) {
+  const x = wtSoloDigitos(a);
+  const y = wtSoloDigitos(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const n = Math.min(x.length, y.length, 9);
+  return n >= 8 && x.slice(-n) === y.slice(-n);
+}
+
+// Para comparar nombres de grupos: sin mayúsculas, tildes, emojis ni signos.
+function wtNormalizar(texto) {
+  return String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function wtVentanaAbierta(ticket) {
+  if (!ticket || !ticket.lastReceivedMessageAt) return false;
+  const t = new Date(ticket.lastReceivedMessageAt).getTime();
+  if (!t) return false;
+  return Date.now() - t < WT_VENTANA_MS - WT_MARGEN_VENTANA_MS;
+}
+
+// Lista chats con un texto de búsqueda. Si el token no tiene permiso para
+// ver los "pendientes", se reintenta sin ellos.
+function wtListarTickets(busqueda) {
+  try {
+    return wtRequest('get', '/tickets', { query: { searchParam: busqueda, status: 'open,pending,closed' } }).tickets || [];
+  } catch (err) {
+    if (err.wtStatus !== 403) throw err;
+    return wtRequest('get', '/tickets', { query: { searchParam: busqueda, status: 'open,closed' } }).tickets || [];
+  }
+}
+
+function wtBuscarTicketCliente(numero) {
+  const lista = wtListarTickets(numero).filter(function (t) {
+    return !t.isGroup && t.contact && wtMismoNumero(t.contact.number, numero);
+  });
+  // La API los devuelve del más reciente al más viejo.
+  return lista.length ? lista[0] : null;
+}
+
+function wtBuscarGrupo() {
+  const cfg = wtConfig();
+  if (cfg.grupoTicketId) return { id: cfg.grupoTicketId, nombre: cfg.grupoNombre || 'Grupo contable' };
+  if (!cfg.grupoNombre) {
+    throw wtError('Falta configurar el grupo contable: cargá WHATICKET_GRUPO_NOMBRE en las propiedades del Apps Script.', 'SIN_GRUPO');
+  }
+  const props = PropertiesService.getScriptProperties();
+  try {
+    const guardado = JSON.parse(props.getProperty(WT_GRUPO_CACHE_PROPERTY) || 'null');
+    if (guardado && guardado.id && guardado.buscado === cfg.grupoNombre) return guardado;
+  } catch (err) { /* se vuelve a buscar */ }
+
+  const buscado = wtNormalizar(cfg.grupoNombre);
+  if (!buscado) throw wtError('WHATICKET_GRUPO_NOMBRE tiene que incluir letras del nombre del grupo.', 'SIN_GRUPO');
+  // Se busca sólo con el texto (sin emojis), que es lo que Whaticket indexa.
+  const grupos = wtListarTickets(buscado).filter(function (t) { return t.isGroup && t.contact; });
+  const exacto = grupos.filter(function (t) { return wtNormalizar(t.contact.name) === buscado; });
+  const elegido = exacto[0] || (grupos.length === 1 ? grupos[0] : null);
+  if (!elegido) {
+    throw wtError(
+      grupos.length
+        ? 'Hay varios grupos parecidos a "' + cfg.grupoNombre + '" en Whaticket. Escribí el nombre exacto en WHATICKET_GRUPO_NOMBRE.'
+        : 'No encontré el grupo "' + cfg.grupoNombre + '" en Whaticket. Revisá el nombre en WHATICKET_GRUPO_NOMBRE.',
+      'GRUPO_NO_ENCONTRADO'
+    );
+  }
+  const grupo = { id: elegido.id, nombre: elegido.contact.name, buscado: cfg.grupoNombre };
+  props.setProperty(WT_GRUPO_CACHE_PROPERTY, JSON.stringify(grupo));
+  return grupo;
+}
+
+// Conexión de WhatsApp para los mensajes nuevos: la configurada, o la única
+// conexión de WhatsApp conectada.
+function wtConexionId() {
+  const cfg = wtConfig();
+  if (cfg.conexionId) return cfg.conexionId;
+  const cache = CacheService.getScriptCache();
+  const enCache = cache.get('WT_CONEXION_ID');
+  if (enCache) return enCache;
+  const conexiones = (wtRequest('get', '/connections').connections || []).filter(function (c) {
+    return /^WHATSAPP$/i.test(String(c.channel || ''));
+  });
+  const conectadas = conexiones.filter(function (c) { return /CONNECTED|OPEN/i.test(String(c.status || '')); });
+  const candidatas = conectadas.length ? conectadas : conexiones;
+  if (candidatas.length !== 1) {
+    throw wtError(
+      candidatas.length
+        ? 'Hay ' + candidatas.length + ' conexiones de WhatsApp en Whaticket: indicá cuál usar en WHATICKET_CONEXION_ID (ver probarWhaticket).'
+        : 'No encontré ninguna conexión de WhatsApp en Whaticket.',
+      'CONEXION_AMBIGUA'
+    );
+  }
+  cache.put('WT_CONEXION_ID', candidatas[0].id, 21600);
+  return candidatas[0].id;
+}
+
+function wtSubirImagen(base64, nombreArchivo) {
+  let blob;
+  try {
+    blob = Utilities.newBlob(
+      Utilities.base64Decode(base64),
+      'image/png',
+      String(nombreArchivo || 'ficha-iva.png').replace(/[^\w.\- ]/g, '_').slice(0, 80)
+    );
+  } catch (err) {
+    throw wtError('No se pudo leer la imagen de la ficha.', 'IMAGEN');
+  }
+  const data = wtRequest('post', '/medias', { form: { media: blob } });
+  const key = data.mediaKey || data.key || (data.media && (data.media.mediaKey || data.media.key)) || (data.data && data.data.mediaKey);
+  if (!key) throw wtError('Whaticket no devolvió la referencia de la imagen subida.', 'SIN_MEDIA_KEY');
+  return key;
+}
+
+function wtResponderTicket(ticketId, texto, mediaKey) {
+  const cuerpo = { signMessage: false };
+  if (texto) cuerpo.body = texto;
+  if (mediaKey) cuerpo.mediaKey = mediaKey;
+  return wtRequest('post', '/tickets/' + encodeURIComponent(ticketId) + '/messages', { json: cuerpo });
+}
+
+function wtMensajeNuevo(numero, nombre, texto, mediaKey) {
+  const cfg = wtConfig();
+  const mensaje = { number: numero };
+  if (nombre) mensaje.name = String(nombre).slice(0, 120);
+  if (texto) mensaje.body = texto;
+  if (mediaKey) {
+    mensaje.mediaKey = mediaKey;
+    mensaje.mediaType = 'image';
+  }
+  const ticketData = {};
+  if (cfg.colaId) ticketData.queueId = cfg.colaId;
+  if (cfg.usuarioId) ticketData.userId = cfg.usuarioId;
+  if (Object.keys(ticketData).length) mensaje.ticketData = ticketData;
+  return wtRequest('post', '/messages', {
+    json: { connectionId: wtConexionId(), campaignName: WT_CAMPANA_NOMBRE, fastMode: true, messages: [mensaje] }
+  });
+}
+
+// ── VALIDACIONES COMUNES ────────────────────────────────────────────────
+function wtNumeroValido(raw) {
+  let numero = wtSoloDigitos(raw);
+  // Celular paraguayo cargado como 0981… → 595981… (mismo criterio que la app).
+  if (/^09\d{8}$/.test(numero)) numero = '595' + numero.slice(1);
+  if (numero.length < 10 || numero.length > 15) {
+    throw wtError('El número de WhatsApp del cliente no es válido. Revisalo en la ficha.', 'NUMERO');
+  }
+  return numero;
+}
+
+function wtTextoValido(raw, obligatorio) {
+  const texto = String(raw || '').trim();
+  if (texto.length > WT_MAX_TEXTO) throw wtError('El mensaje es demasiado largo.', 'TEXTO');
+  if (obligatorio && !texto) throw wtError('Escribí un mensaje.', 'TEXTO');
+  return texto;
+}
+
+function wtImagenValida(raw) {
+  let imagen = String(raw || '');
+  if (imagen.indexOf('base64,') !== -1) imagen = imagen.split('base64,')[1];
+  if (imagen.length > WT_MAX_IMAGEN_CHARS) throw wtError('La imagen de la ficha es demasiado grande.', 'IMAGEN');
+  return imagen;
+}
+
+// ── ACCIONES ────────────────────────────────────────────────────────────
+// Ficha IVA → cliente o grupo contable. body.destino: "cliente" | "grupo".
+function handleWhaticketEnviar(body, sessionUser) {
+  const destino = body.destino === 'grupo' ? 'grupo' : 'cliente';
+  const texto = wtTextoValido(body.texto, false);
+  const imagen = wtImagenValida(body.imagen);
+  if (!imagen && !texto) throw wtError('No hay nada para enviar.', 'VACIO');
+  const numero = destino === 'cliente' ? wtNumeroValido(body.numero) : '';
+
+  // Evita el doble envío por un doble clic o un reintento.
+  const cache = CacheService.getScriptCache();
+  const claveDuplicado = 'WT_' + destino + '_' + (numero || 'grupo') + '_' + String(body.periodo || '') + '_' + String(body.ruc || '');
+  if (!body.forzar && cache.get(claveDuplicado)) {
+    return errorResponse(
+      destino === 'grupo'
+        ? 'Esta ficha se acaba de enviar al grupo contable. Esperá un momento antes de reenviarla.'
+        : 'Esta ficha se acaba de enviar a ese número. Esperá un momento antes de reenviarla.',
+      'WHATICKET_DUPLICADO'
+    );
+  }
+
+  let via = '';
+  let ticketId = '';
+  try {
+    const mediaKey = imagen ? wtSubirImagen(imagen, body.nombreArchivo) : '';
+    if (destino === 'grupo') {
+      const grupo = wtBuscarGrupo();
+      try {
+        wtResponderTicket(grupo.id, texto, mediaKey);
+      } catch (err) {
+        if (/REPLY_WINDOW_CLOSED/i.test(err.wtCodigo)) {
+          throw wtError('Whaticket no deja escribir en el grupo contable porque nadie escribió ahí en los últimos 7 días. Mandá cualquier mensaje en el grupo desde el celular y volvé a intentar.', 'GRUPO_VENTANA');
+        }
+        if (err.wtStatus === 404) PropertiesService.getScriptProperties().deleteProperty(WT_GRUPO_CACHE_PROPERTY);
+        throw err;
+      }
+      via = 'grupo';
+      ticketId = grupo.id;
+    } else {
+      const ticket = wtBuscarTicketCliente(numero);
+      if (ticket && wtVentanaAbierta(ticket)) {
+        try {
+          wtResponderTicket(ticket.id, texto, mediaKey);
+          via = 'chat';
+          ticketId = ticket.id;
+        } catch (err) {
+          if (!/REPLY_WINDOW_CLOSED/i.test(err.wtCodigo)) throw err;
+        }
+      }
+      if (!via) {
+        wtMensajeNuevo(numero, body.cliente, texto, mediaKey);
+        via = 'nuevo';
+        ticketId = ticket ? ticket.id : '';
+      }
+    }
+  } catch (err) {
+    registrarEnvioWhaticket(sessionUser, destino, body, numero, '', false, err.message);
+    return errorResponse(err.message, 'WHATICKET_' + (err.wtCodigo ? String(err.wtCodigo).replace(/[^\w]/g, '').toUpperCase() : 'ERROR'));
+  }
+
+  registrarEnvioWhaticket(sessionUser, destino, body, numero, via, true, '');
+  cache.put(claveDuplicado, '1', WT_DUPLICADO_SEGUNDOS);
+  return jsonResponse({ ok: true, enviado: true, destino: destino, via: via, ticketId: ticketId });
+}
+
+function wtMensajeParaApp(m) {
+  return {
+    id: m.id,
+    texto: m.body || '',
+    deMi: Boolean(m.fromMe),
+    nota: Boolean(m.isNote),
+    tipo: m.mediaType || '',
+    mediaUrl: m.mediaUrl || '',
+    ack: typeof m.ack === 'number' ? m.ack : null,
+    fecha: m.createdAt || ''
+  };
+}
+
+// Chat del cliente (sólo ese cliente, buscado por su número).
+// body: { numero, cursor?, cursorId? } → 20 mensajes, del más viejo al más nuevo.
+function handleWhaticketChat(body) {
+  const numero = wtNumeroValido(body.numero);
+  const ticket = wtBuscarTicketCliente(numero);
+  if (!ticket) return jsonResponse({ ok: true, ticket: null, mensajes: [], hayMasAntes: false });
+  const query = {};
+  if (body.cursor && body.cursorId) {
+    query.cursor = body.cursor;
+    query.cursorId = body.cursorId;
+    query.direction = 'before';
+  }
+  const data = wtRequest('get', '/tickets/' + encodeURIComponent(ticket.id) + '/messages', { query: query });
+  const mensajes = (data.messages || []).filter(function (m) { return !m.isDeleted; }).map(wtMensajeParaApp);
+  return jsonResponse({
+    ok: true,
+    ticket: {
+      id: ticket.id,
+      estado: ticket.status || '',
+      nombre: (ticket.contact && ticket.contact.name) || '',
+      numero: (ticket.contact && ticket.contact.number) || numero,
+      foto: (ticket.contact && ticket.contact.profilePicUrl) || '',
+      ventanaAbierta: wtVentanaAbierta(ticket),
+      ultimoRecibido: ticket.lastReceivedMessageAt || ''
+    },
+    mensajes: mensajes,
+    // Para pedir más viejos: cursor/cursorId del primer mensaje de la página.
+    cursor: data.messages && data.messages.length ? { cursor: data.messages[0].createdAt, cursorId: data.messages[0].id } : null,
+    hayMasAntes: Boolean(data.hasMoreBefore)
+  });
+}
+
+// Respuesta escrita desde Sistema MJ en el chat del cliente. Va firmada con el
+// nombre de quien la escribe, como hace Whaticket.
+function handleWhaticketResponder(body, sessionUser) {
+  const numero = wtNumeroValido(body.numero);
+  const texto = wtTextoValido(body.texto, true);
+  const ticket = wtBuscarTicketCliente(numero);
+  if (!ticket) {
+    throw wtError('Este cliente todavía no tiene chat en Whaticket. Enviale primero la ficha.', 'SIN_CHAT');
+  }
+  if (!wtVentanaAbierta(ticket)) {
+    throw wtError('Pasaron más de 7 días desde el último mensaje del cliente: Whaticket no deja responder en el chat. Usá «Enviar al cliente» con la ficha, o escribile desde Whaticket.', 'VENTANA');
+  }
+  try {
+    wtResponderTicket(ticket.id, '*' + sessionUser + ':*\n' + texto, '');
+  } catch (err) {
+    registrarEnvioWhaticket(sessionUser, 'respuesta', body, numero, 'chat', false, err.message);
+    throw err;
+  }
+  registrarEnvioWhaticket(sessionUser, 'respuesta', body, numero, 'chat', true, '');
+  return jsonResponse({ ok: true });
+}
+
+function registrarEnvioWhaticket(sessionUser, destino, body, numero, via, ok, detalle) {
+  try {
+    const ss = getAdminSpreadsheet();
+    let sheet = ss.getSheetByName(WT_LOG_SHEET_NAME);
+    if (!sheet) {
+      sheet = ss.insertSheet(WT_LOG_SHEET_NAME);
+      const headers = ['Fecha', 'Usuario', 'Destino', 'Cliente', 'RUC', 'Período', 'Número', 'Vía', 'Resultado', 'Detalle'];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+    const vias = { chat: 'Chat existente', nuevo: 'Mensaje nuevo', grupo: 'Grupo contable' };
+    sheet.appendRow([
+      new Date(), sessionUser,
+      destino === 'grupo' ? 'Grupo contable' : destino === 'respuesta' ? 'Respuesta' : 'Cliente',
+      String(body.cliente || '').slice(0, 120), String(body.ruc || '').slice(0, 20),
+      String(body.periodo || '').slice(0, 7), numero,
+      vias[via] || '', ok ? 'Enviado' : 'Error', String(detalle || '').slice(0, 500)
+    ]);
+  } catch (err) {
+    // Informativo: no frena el envío.
+  }
+}
+
+// ── PRUEBA MANUAL DESDE EL EDITOR ───────────────────────────────────────
+// Ejecutar a mano: muestra el token, sus permisos, las conexiones y el grupo.
+function probarWhaticket() {
+  const me = wtRequest('get', '/me');
+  Logger.log('Token: ' + JSON.stringify(me));
+  const conexiones = wtRequest('get', '/connections').connections || [];
+  conexiones.forEach(function (c) {
+    Logger.log('Conexión: ' + c.name + ' | canal ' + c.channel + ' | estado ' + c.status + ' | id ' + c.id);
+  });
+  Logger.log('Conexión que se usará para mensajes nuevos: ' + wtConexionId());
+  if (wtConfig().grupoNombre || wtConfig().grupoTicketId) {
+    PropertiesService.getScriptProperties().deleteProperty(WT_GRUPO_CACHE_PROPERTY);
+    const grupo = wtBuscarGrupo();
+    Logger.log('Grupo contable: ' + grupo.nombre + ' (chat ' + grupo.id + ')');
+  } else {
+    Logger.log('Falta WHATICKET_GRUPO_NOMBRE para el envío al grupo contable.');
+  }
+}
+
+// ── RUTEO ───────────────────────────────────────────────────────────────
+// Lo llama handleAgenteAction (AppsScript-Agente.gs) para las acciones que
+// empiezan con "whaticket". Devuelve null si no es de acá.
+function handleWhaticketAction(action, body, sessionUser, sessionRole) {
+  const routes = {
+    whaticketEnviar: function () { return handleWhaticketEnviar(body, sessionUser); },
+    whaticketChat: function () { return handleWhaticketChat(body); },
+    whaticketResponder: function () { return handleWhaticketResponder(body, sessionUser); }
+  };
+  const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
+  if (!route) return null;
+  try {
+    return route();
+  } catch (err) {
+    const codigo = err.wtCodigo ? String(err.wtCodigo).replace(/[^\w]/g, '').toUpperCase() : 'ERROR';
+    return errorResponse(err.message, 'WHATICKET_' + codigo);
+  }
+}
+
+// ===== AppsScript-AvisoDiario.gs =====
+/**
+ * AVISO DIARIO DE VENCIMIENTOS — mensaje automático al grupo contable.
+ *
+ * Cada mañana manda al grupo de WhatsApp del equipo (por Whaticket) un
+ * resumen de los vencimientos de IVA:
+ *   - lo que vence hoy y hasta el día del próximo aviso (normalmente hoy y
+ *     mañana; el sábado, si el domingo no hay aviso, sábado a lunes), con la
+ *     terminación de RUC (VENC.), pendientes por encargado y el monto a
+ *     pagar de cada cliente;
+ *   - los clientes del período que ya vencieron y siguen sin presentar.
+ * Usa los mismos datos que la app: la hoja mensual de la planilla (clientes,
+ * RUC, encargado, "Presentado") y la liquidación de IVA (estado, monto y
+ * vencimiento manual), con el mismo cálculo de fechas (día 7 + 2·VENC. del
+ * mes siguiente al período).
+ *
+ * Instalación en el proyecto de Apps Script:
+ *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "AvisoDiario" y pegar
+ *      este contenido completo. Necesita los archivos "Whaticket" (envío al
+ *      grupo), "IVA" (liquidaciones) y "Código" (planillas).
+ *   2. Ejecutar "probarAvisoDiario": muestra en el registro el mensaje que se
+ *      mandaría hoy, SIN enviarlo.
+ *   3. Ejecutar "instalarAvisoDiario": programa el envío automático todos los
+ *      días a la hora configurada (pide permiso para ejecutarse solo y para
+ *      mandar correo).
+ *   (No hace falta publicar una nueva versión del Web App: corre solo.)
+ *
+ * Propiedades opcionales (Configuración del proyecto > Propiedades):
+ *   AVISO_DIARIO_HORA    hora del envío, 0 a 23 (por defecto 7, hora de Paraguay).
+ *   AVISO_DIARIO_DIAS    días de envío: "1-6" lunes a sábado (por defecto),
+ *                        "1-5" lunes a viernes, "0-6" todos los días.
+ *   AVISO_DIARIO_EMAIL   correo de respaldo si Whaticket no puede enviar
+ *                        (por defecto, el del dueño del script).
+ *
+ * Otras funciones: "enviarAvisoDiarioAhora" (manda ya, aunque hoy ya se haya
+ * mandado) y "desinstalarAvisoDiario" (deja de enviarse solo).
+ */
+
+const AD_TZ = 'America/Asuncion';
+const AD_HORA_DEFAULT = 7;
+const AD_DIAS_DEFAULT = '1-6';
+const AD_ULTIMO_PROPERTY = 'AVISO_DIARIO_ULTIMO';
+const AD_MAX_CARACTERES = 3800; // WhatsApp admite ~4000 por mensaje
+const AD_MAX_NOMBRES_POR_ENCARGADO = 8;
+const AD_MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const AD_DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+// ── FECHAS (mismo criterio que src/iva/ivaCore.js) ─────────────────────
+function adProp(name) {
+  return String(PropertiesService.getScriptProperties().getProperty(name) || '').trim();
+}
+
+// Hoy en Paraguay, como fecha local (medianoche) del script.
+function adHoy() {
+  const p = Utilities.formatDate(new Date(), AD_TZ, 'yyyy-MM-dd').split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+function adIso(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function adFromIso(s) {
+  const p = String(s).split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+function adMasDias(d, n) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+function adFechaCorta(d) {
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// "2026-10" del período fiscal cuyo IVA vence en el mes de la fecha dada.
+function adPeriodoQueVence(d) {
+  const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return p.getFullYear() + '-' + String(p.getMonth() + 1).padStart(2, '0');
+}
+
+function adUltimoDigito(ruc) {
+  const d = String(ruc || '').replace(/\D/g, '');
+  return d ? Number(d.slice(-1)) : null;
+}
+
+function adVencimiento(periodo, digito, vencManual) {
+  if (vencManual && /^\d{4}-\d{2}-\d{2}$/.test(vencManual)) return { fecha: adFromIso(vencManual), manual: true };
+  const p = periodo.split('-').map(Number);
+  return { fecha: new Date(p[0], p[1], 7 + 2 * digito), manual: false };
+}
+
+// Días de envío: "1-6", "1-5", "0-6" o una lista "1,3,5" (0 = domingo).
+function adDiasDeEnvio() {
+  const raw = adProp('AVISO_DIARIO_DIAS') || AD_DIAS_DEFAULT;
+  const dias = {};
+  raw.split(',').forEach(function (parte) {
+    const m = parte.trim().match(/^(\d)(?:\s*-\s*(\d))?$/);
+    if (!m) return;
+    const a = Number(m[1]);
+    const b = m[2] !== undefined ? Number(m[2]) : a;
+    for (let i = Math.min(a, b); i <= Math.max(a, b) && i <= 6; i++) dias[i] = true;
+  });
+  return Object.keys(dias).length ? dias : { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+}
+
+// ── PLANILLA DEL MES (mismo criterio que src/utils.js) ──────────────────
+function adCompact(h) {
+  return String(h || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+function adColumnas(headers) {
+  const comp = headers.map(adCompact);
+  const buscar = function (fn) {
+    const i = comp.findIndex(fn);
+    return i === -1 ? -1 : i;
+  };
+  const nombre = (function () {
+    const fuerte = /^(cliente|razonsocial|razon|nombre|titular|contribuyente|empresa|denominacion|sociedad|apellido)/;
+    const suave = /cliente|razon|nombre|titular|contribuyente|empresa/;
+    let i = buscar(function (c) { return fuerte.test(c); });
+    if (i === -1) i = buscar(function (c) { return suave.test(c); });
+    return i === -1 ? 0 : i;
+  })();
+  const ruc = buscar(function (c) { return c === 'ruc' || c === 'nroruc' || c === 'ruccliente' || c.indexOf('ruc') === 0; });
+  const dv = buscar(function (c) { return c === 'dv' || c === 'digitoverificador' || c === 'digito'; });
+  const exactosEncargado = ['encargado', 'encargada', 'responsable', 'asignado', 'asignada', 'asignadoa', 'operador', 'asignacion', 'usuarioresponsable'];
+  let encargado = buscar(function (c) { return exactosEncargado.indexOf(c) !== -1; });
+  if (encargado === -1) {
+    encargado = buscar(function (c) {
+      if (/present|archiv|liquid|enviad/.test(c)) return false;
+      return /encargad|responsable|asignad/.test(c);
+    });
+  }
+  const exactosPresentado = ['presentado', 'presentada', 'presento', 'presentacion', 'ddjj', 'dj', 'declaracion', 'declaracionjurada', 'declarado', 'liquidado', 'enviado', 'presentados', 'presentadas'];
+  const presentado = buscar(function (c) { return exactosPresentado.indexOf(c) !== -1; });
+  const presentadoPor = buscar(function (c) { return c.indexOf('presentadopor') === 0 || c === 'presentopor'; });
+  return { nombre: nombre, ruc: ruc, dv: dv, encargado: encargado, presentado: presentado, presentadoPor: presentadoPor };
+}
+
+function adAfirmativo(v) {
+  if (v === true) return true;
+  const t = String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+  return ['SI', 'SÍ', 'S', 'OK', 'X', 'TRUE', '1', 'V', 'LISTO', 'HECHO', 'PRES', 'PRESENTADO'].indexOf(t) !== -1;
+}
+
+function adPresentadoEnPlanilla(row, cols) {
+  if (cols.presentado !== -1) return adAfirmativo(row[cols.presentado]);
+  if (cols.presentadoPor !== -1) {
+    const t = String(row[cols.presentadoPor] || '').trim();
+    return Boolean(t) && !/^no?$/i.test(t);
+  }
+  return false;
+}
+
+function adMesDeHoja(nombre) {
+  const norm = String(nombre || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  for (let i = 0; i < AD_MESES.length; i++) if (norm.indexOf(AD_MESES[i]) !== -1) return i;
+  const num = norm.match(/\b(0?[1-9]|1[0-2])\b/);
+  return num ? Number(num[1]) - 1 : null;
+}
+
+// Hoja mensual de la planilla para un período fiscal "AAAA-MM" (la hoja de
+// octubre es la del período octubre). Devuelve null si no existe.
+function adHojaDelPeriodo(periodo) {
+  const p = periodo.split('-').map(Number);
+  const anio = String(p[0]);
+  const mes = p[1] - 1;
+  const nombres = getAvailableSheets(anio).filter(function (n) {
+    if (adMesDeHoja(n) !== mes) return false;
+    const anioEnNombre = String(n).match(/\b(20\d{2})\b/);
+    return !anioEnNombre || anioEnNombre[1] === anio;
+  });
+  if (!nombres.length) return null;
+  const sheet = getMonthSheet(anio, nombres[0]);
+  return sheet ? { sheet: sheet, nombre: nombres[0] } : null;
+}
+
+// Clientes de la hoja: [{ nombre, ruc, encargado, presentadoPlanilla }].
+function adClientesDeHoja(sheet) {
+  const data = fillMergedValues(sheet.getDataRange());
+  if (data.length < 2) return [];
+  const cols = adColumnas(data[0]);
+  if (cols.ruc === -1) return [];
+  const vistos = {};
+  const out = [];
+  data.slice(1).forEach(function (row) {
+    const crudo = String(row[cols.ruc] || '').trim();
+    const ruc = (crudo.indexOf('-') !== -1 ? crudo.split('-')[0] : crudo).replace(/\D/g, '');
+    if (!ruc || vistos[ruc]) return;
+    vistos[ruc] = true;
+    out.push({
+      nombre: String(row[cols.nombre] || '').trim() || 'Sin nombre',
+      ruc: ruc,
+      encargado: cols.encargado !== -1 ? String(row[cols.encargado] || '').trim() : '',
+      presentadoPlanilla: adPresentadoEnPlanilla(row, cols)
+    });
+  });
+  return out;
+}
+
+// Liquidaciones del período: { ruc: { estado, resultado, monto, vencManual } }.
+function adLiquidaciones(periodo) {
+  const sheet = getIvaPeriodSheet(periodo, false);
+  const out = {};
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getDisplayValues().forEach(function (row) {
+    const ruc = String(row[0]).trim();
+    if (!ruc) return;
+    const doc = joinIvaData(row) || {};
+    out[ruc] = {
+      estado: doc.estado || 'pend',
+      resultado: String(row[3] || ''),
+      monto: Number(String(row[4] || '').replace(/[^\d-]/g, '')) || 0,
+      vencManual: doc.vencManual || ''
+    };
+  });
+  return out;
+}
+
+// ── ARMADO DEL MENSAJE ─────────────────────────────────────────────────
+function adGs(n) {
+  return Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function adEtiquetaEstado(estado) {
+  return { pend: 'pendiente', grupo: 'enviado al grupo', env: 'enviado al cliente', pres: 'presentado' }[estado] || 'pendiente';
+}
+
+// Datos del aviso para la fecha "hoy" (Date). Exportado para las pruebas.
+function adCalcularAviso(hoy) {
+  const diasEnvio = adDiasDeEnvio();
+  // Rango: desde hoy hasta el día del próximo aviso, inclusive. Con aviso
+  // diario son hoy y mañana; el sábado (sin aviso el domingo) son sábado,
+  // domingo y lunes.
+  let fin = adMasDias(hoy, 1);
+  for (let i = 1; i <= 7; i++) {
+    const d = adMasDias(hoy, i);
+    if (diasEnvio[d.getDay()]) { fin = d; break; }
+  }
+  const dias = [];
+  for (let d = hoy; adIso(d) <= adIso(fin); d = adMasDias(d, 1)) dias.push(d);
+
+  const periodos = {};
+  dias.concat([hoy]).forEach(function (d) { periodos[adPeriodoQueVence(d)] = true; });
+
+  const porFecha = {}; // iso → [cliente]
+  const vencidos = []; // clientes vencidos sin presentar (del período que vence este mes)
+  const periodoActual = adPeriodoQueVence(hoy);
+  const avisosDatos = [];
+
+  Object.keys(periodos).forEach(function (periodo) {
+    const hoja = adHojaDelPeriodo(periodo);
+    if (!hoja) {
+      avisosDatos.push('No encontré la hoja de ' + AD_MESES[Number(periodo.split('-')[1]) - 1] + ' ' + periodo.split('-')[0] + ' en la planilla.');
+      return;
+    }
+    const liqs = adLiquidaciones(periodo);
+    adClientesDeHoja(hoja.sheet).forEach(function (c) {
+      const t = adUltimoDigito(c.ruc);
+      if (t === null) return;
+      const l = liqs[c.ruc] || null;
+      const v = adVencimiento(periodo, t, l && l.vencManual);
+      const presentado = c.presentadoPlanilla || (l && l.estado === 'pres');
+      const item = {
+        nombre: c.nombre,
+        encargado: c.encargado || 'Sin asignar',
+        digito: t,
+        manual: v.manual,
+        estado: presentado ? 'pres' : (l ? l.estado : 'none'),
+        resultado: l ? l.resultado : '',
+        monto: l ? l.monto : 0,
+        fecha: v.fecha
+      };
+      const clave = adIso(v.fecha);
+      if (dias.some(function (d) { return adIso(d) === clave; })) {
+        (porFecha[clave] = porFecha[clave] || []).push(item);
+      } else if (periodo === periodoActual && clave < adIso(hoy) && !presentado) {
+        vencidos.push(item);
+      }
+    });
+  });
+
+  return { hoy: hoy, dias: dias, porFecha: porFecha, vencidos: vencidos, avisosDatos: avisosDatos };
+}
+
+function adAgruparPorEncargado(items) {
+  const grupos = {};
+  items.forEach(function (it) { (grupos[it.encargado] = grupos[it.encargado] || []).push(it); });
+  return Object.keys(grupos)
+    .sort(function (a, b) { return grupos[b].length - grupos[a].length || a.localeCompare(b); })
+    .map(function (e) { return { encargado: e, items: grupos[e] }; });
+}
+
+function adNombreCorto(it, conMonto) {
+  let txt = it.nombre;
+  if (conMonto && it.resultado === 'A pagar' && it.monto > 0) txt += ' (Gs. ' + adGs(it.monto) + ')';
+  else if (it.estado === 'none') txt += ' (sin cargar)';
+  else if (it.estado === 'grupo' || it.estado === 'env') txt += ' (' + adEtiquetaEstado(it.estado) + ')';
+  return txt;
+}
+
+function adListaPorEncargado(items, conMonto) {
+  return adAgruparPorEncargado(items).map(function (g) {
+    const nombres = g.items
+      .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); })
+      .slice(0, AD_MAX_NOMBRES_POR_ENCARGADO)
+      .map(function (it) { return adNombreCorto(it, conMonto); });
+    const resto = g.items.length - nombres.length;
+    return '• *' + g.encargado + '* (' + g.items.length + '): ' + nombres.join(', ') + (resto > 0 ? ' y ' + resto + ' más' : '');
+  });
+}
+
+function adArmarMensaje(datos) {
+  const hoy = datos.hoy;
+  const lineas = [];
+  lineas.push('*Vencimientos IVA — ' + AD_DIAS_SEMANA[hoy.getDay()] + ' ' + adFechaCorta(hoy) + '*');
+
+  let hayAlgo = false;
+  datos.dias.forEach(function (d, idx) {
+    const items = datos.porFecha[adIso(d)] || [];
+    if (!items.length) return;
+    hayAlgo = true;
+    const digitos = {};
+    items.forEach(function (it) { if (!it.manual) digitos[it.digito] = true; });
+    const titulo = idx === 0 ? 'Hoy' : idx === 1 ? 'Mañana' : AD_DIAS_SEMANA[d.getDay()].charAt(0).toUpperCase() + AD_DIAS_SEMANA[d.getDay()].slice(1);
+    const venc = Object.keys(digitos).length ? ' · VENC. ' + Object.keys(digitos).join(', ') : '';
+    const pendientes = items.filter(function (it) { return it.estado !== 'pres'; });
+    const aPagar = pendientes.reduce(function (s, it) { return s + (it.resultado === 'A pagar' ? it.monto : 0); }, 0);
+    lineas.push('');
+    lineas.push('*' + titulo + ' ' + adFechaCorta(d) + venc + '*: ' + items.length + ' cliente' + (items.length === 1 ? '' : 's') +
+      ' · ' + (items.length - pendientes.length) + ' presentado' + (items.length - pendientes.length === 1 ? '' : 's') +
+      ' · *' + pendientes.length + ' sin presentar*' + (aPagar > 0 ? ' (a pagar Gs. ' + adGs(aPagar) + ')' : ''));
+    if (pendientes.length) adListaPorEncargado(pendientes, true).forEach(function (l) { lineas.push(l); });
+    else lineas.push('Todo presentado ✅');
+  });
+
+  if (datos.vencidos.length) {
+    hayAlgo = true;
+    lineas.push('');
+    lineas.push('*Vencidos sin presentar: ' + datos.vencidos.length + '*');
+    adListaPorEncargado(datos.vencidos, false).forEach(function (l) { lineas.push(l); });
+  }
+
+  if (!hayAlgo) return null;
+
+  datos.avisosDatos.forEach(function (a) { lineas.push('', '⚠️ ' + a); });
+  lineas.push('', '_Aviso automático de Sistema MJ_');
+
+  let texto = lineas.join('\n');
+  if (texto.length > AD_MAX_CARACTERES) {
+    texto = texto.slice(0, AD_MAX_CARACTERES - 80).replace(/\n[^\n]*$/, '') + '\n…\n_Lista recortada: el detalle completo está en Sistema MJ → Vencimientos IVA._';
+  }
+  return texto;
+}
+
+// ── ENVÍO ──────────────────────────────────────────────────────────────
+function adCorreoRespaldo() {
+  return adProp('AVISO_DIARIO_EMAIL') || Session.getEffectiveUser().getEmail();
+}
+
+// Manda el texto al grupo contable; si Whaticket no puede, lo manda por correo.
+function adEnviar(texto) {
+  try {
+    const grupo = wtBuscarGrupo();
+    wtResponderTicket(grupo.id, texto, '');
+    registrarEnvioWhaticket('Aviso diario', 'grupo', { cliente: 'Aviso diario de vencimientos' }, '', 'grupo', true, '');
+    return { ok: true, via: 'whaticket' };
+  } catch (err) {
+    registrarEnvioWhaticket('Aviso diario', 'grupo', { cliente: 'Aviso diario de vencimientos' }, '', 'grupo', false, err.message);
+    const correo = adCorreoRespaldo();
+    if (correo) {
+      MailApp.sendEmail(
+        correo,
+        'Sistema MJ — aviso de vencimientos (no se pudo enviar al grupo)',
+        'No se pudo mandar el aviso al grupo contable por Whaticket:\n' + err.message +
+        '\n\nEste es el aviso de hoy:\n\n' + texto.replace(/\*/g, '').replace(/_/g, '')
+      );
+      return { ok: false, via: 'correo', error: err.message };
+    }
+    throw err;
+  }
+}
+
+function adConstruirTexto() {
+  return adArmarMensaje(adCalcularAviso(adHoy()));
+}
+
+// Lo ejecuta el disparador programado.
+function enviarAvisoDiario() {
+  const hoy = adHoy();
+  if (!adDiasDeEnvio()[hoy.getDay()]) return;
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(AD_ULTIMO_PROPERTY) === adIso(hoy)) return; // ya se mandó hoy
+  const texto = adArmarMensaje(adCalcularAviso(hoy));
+  props.setProperty(AD_ULTIMO_PROPERTY, adIso(hoy));
+  if (!texto) return; // nada que avisar
+  adEnviar(texto);
+}
+
+// ── FUNCIONES PARA EJECUTAR A MANO DESDE EL EDITOR ─────────────────────
+// Muestra el aviso de hoy en el registro, sin enviarlo.
+function probarAvisoDiario() {
+  const texto = adConstruirTexto();
+  Logger.log(texto || 'Hoy no hay vencimientos ni vencidos para avisar: no se enviaría nada.');
+  Logger.log('Días de envío: ' + (adProp('AVISO_DIARIO_DIAS') || AD_DIAS_DEFAULT) +
+    ' · hora: ' + (adProp('AVISO_DIARIO_HORA') || AD_HORA_DEFAULT) + ' · zona del script: ' + Session.getScriptTimeZone());
+}
+
+// Manda el aviso de hoy ya mismo (aunque ya se haya mandado).
+function enviarAvisoDiarioAhora() {
+  const texto = adConstruirTexto();
+  if (!texto) {
+    Logger.log('Hoy no hay vencimientos ni vencidos para avisar: no se envió nada.');
+    return;
+  }
+  const r = adEnviar(texto);
+  Logger.log(r.ok ? 'Aviso enviado al grupo contable.' : 'No se pudo enviar por Whaticket; se mandó por correo a ' + adCorreoRespaldo() + '. Motivo: ' + r.error);
+}
+
+// Programa el envío automático diario (reemplaza el anterior si existía).
+function instalarAvisoDiario() {
+  desinstalarAvisoDiario();
+  const hora = Math.min(23, Math.max(0, parseInt(adProp('AVISO_DIARIO_HORA'), 10) || AD_HORA_DEFAULT));
+  ScriptApp.newTrigger('enviarAvisoDiario').timeBased().everyDays(1).atHour(hora).inTimezone(AD_TZ).create();
+  Logger.log('Aviso diario programado todos los días a las ' + hora + ' h (Paraguay). Días con envío: ' +
+    (adProp('AVISO_DIARIO_DIAS') || AD_DIAS_DEFAULT) + '. Correo de respaldo: ' + adCorreoRespaldo());
+}
+
+function desinstalarAvisoDiario() {
+  let quitados = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'enviarAvisoDiario') {
+      ScriptApp.deleteTrigger(t);
+      quitados++;
+    }
+  });
+  Logger.log(quitados ? 'Aviso diario desprogramado.' : 'No había aviso diario programado.');
 }
 
 // ===== pruebas/instalador.gs =====

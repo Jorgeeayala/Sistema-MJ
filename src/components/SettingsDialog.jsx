@@ -9,6 +9,7 @@ import {
   Moon,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Sun,
   Type,
   UserCheck,
@@ -18,6 +19,77 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import CdcLotesPanel from '../cdc/CdcLotesPanel';
+import SitioWebLink from '../estudio/SitioWebLink';
+import {
+  AMBIENTES,
+  AMBIENTE_AUTOMATICA,
+  AMBIENTE_NINGUNA,
+  ambienteDeFecha,
+} from '../ambiente/ambientes';
+
+// Ambientación por época: la elección se guarda en el usuario (Apps Script).
+// Un solo selector desplegable para que la sección ocupe poco lugar.
+function AmbientacionSection({ ambiente }) {
+  const [error, setError] = useState('');
+  const hoy = ambienteDeFecha();
+  const elegir = (cambios) => {
+    setError('');
+    ambiente.guardar(cambios).catch((err) =>
+      setError(err?.message || 'No se pudo guardar. Revisá la conexión e intentá de nuevo.')
+    );
+  };
+  return (
+    <div className="settings-subsection settings-amb">
+      <div className="settings-amb-row">
+        <label className="settings-subsection-title" htmlFor="settings-amb-select">
+          <Sparkles size={15} />
+          Ambientación
+        </label>
+        <select
+          id="settings-amb-select"
+          className="settings-amb-select"
+          value={ambiente.ambientacion}
+          onChange={(e) => elegir({ ambientacion: e.target.value })}
+        >
+          <option value={AMBIENTE_NINGUNA}>Ninguna</option>
+          <option value={AMBIENTE_AUTOMATICA}>
+            Automática{hoy ? ` (hoy: ${hoy.emoji} ${hoy.nombre})` : ''}
+          </option>
+          <optgroup label="Fechas especiales">
+            {AMBIENTES.filter((a) => a.grupo === 'fecha').map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.emoji} {a.nombre}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Estaciones del año">
+            {AMBIENTES.filter((a) => a.grupo === 'estacion').map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.emoji} {a.nombre}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </div>
+      {ambiente.ambientacion !== AMBIENTE_NINGUNA && (
+        <label className="settings-amb-toggle">
+          <input
+            type="checkbox"
+            checked={ambiente.animacion}
+            onChange={(e) => elegir({ animacion: e.target.checked })}
+          />
+          Animación corta al ingresar
+        </label>
+      )}
+      {error && (
+        <p className="settings-amb-error" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="settings-note">Decora tu panel según la época. Se guarda en tu usuario.</p>
+    </div>
+  );
+}
 
 function cleanPin(value) {
   return value.replace(/\D/g, '').slice(0, 4);
@@ -38,6 +110,8 @@ export default function SettingsDialog({
   onChangeUser,
   onThemeChange,
   onFontScaleChange,
+  ambiente = null,
+  sitioWeb = '',
 }) {
   const [view, setView] = useState(() => (mustChangePin ? 'pin' : 'main'));
   const [currentPin, setCurrentPin] = useState('');
@@ -318,7 +392,16 @@ export default function SettingsDialog({
                   </p>
                 </div>
               )}
+
+              {ambiente && <AmbientacionSection ambiente={ambiente} />}
             </section>
+
+            {sitioWeb && (
+              <section className="settings-section">
+                <h3 className="settings-section-title">Estudio</h3>
+                <SitioWebLink url={sitioWeb} variante="settings" />
+              </section>
+            )}
 
             <section className="settings-section">
               <h3 className="settings-section-title">Marangatu / Descargas XML</h3>

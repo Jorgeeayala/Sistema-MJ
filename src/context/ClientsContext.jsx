@@ -57,6 +57,31 @@ const STORAGE_KEY_TEAM_ORDER = 'app-team-order';
 // clientes. `null` significa "todavía no se definió" y equivale a todos.
 const STORAGE_KEY_REPARTO = 'app-reparto-users';
 
+// Personas EXCLUIDAS de la asignación (no se les asignan clientes ni a mano
+// ni en el reparto): por ejemplo, quien sólo administra o no lleva cartera.
+// Es una preferencia del EQUIPO guardada en el servidor (igual en todos los
+// dispositivos); acá sólo se cachea para arrancar rápido.
+const STORAGE_KEY_EXCLUIDOS = 'app-team-excluidos';
+
+function readSavedExcluded() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY_EXCLUIDOS) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((n) => typeof n === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistExcluded(list) {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXCLUIDOS, JSON.stringify(list));
+  } catch {
+    // cache opcional
+  }
+}
+
+const mismoNombre = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
 const ClientsContext = createContext(null);
 const ClientsMetaContext = createContext(null);
 const ClientsDataContext = createContext(null);
@@ -164,7 +189,52 @@ export function ClientsProvider({ user, userRole, year, month, children }) {
     [rosterUsers, user]
   );
 
-  const teamUsers = useMemo(() => orderUsers(rosterWithUser, teamOrder), [rosterWithUser, teamOrder]);
+  // Todo el equipo, en el orden del reparto (incluye a los excluidos).
+  const allTeamUsers = useMemo(() => orderUsers(rosterWithUser, teamOrder), [rosterWithUser, teamOrder]);
+
+  // Excluidos de la asignación: se leen del servidor al entrar. Si el backend
+  // todavía no tiene la acción, queda vacío y la opción no se muestra.
+  const [excludedUsers, setExcludedUsers] = useState(readSavedExcluded);
+  const [excludedSupported, setExcludedSupported] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    api.preferencias.equipo()
+      .then(({ excluidosAsignacion }) => {
+        if (!vivo) return;
+        setExcludedUsers(excluidosAsignacion);
+        persistExcluded(excluidosAsignacion);
+        setExcludedSupported(true);
+      })
+      .catch(() => {
+        // sin el módulo actualizado: se mantiene lo cacheado
+      });
+    return () => { vivo = false; };
+  }, [user]);
+
+  // Lo que consumen las pantallas para ASIGNAR: el equipo sin los excluidos.
+  const teamUsers = useMemo(
+    () => allTeamUsers.filter((u) => !excludedUsers.some((x) => mismoNombre(x, u))),
+    [allTeamUsers, excludedUsers]
+  );
+
+  // Excluye o vuelve a incluir a alguien (sólo ADMINISTRADOR/SUPERUSUARIO; el
+  // servidor lo vuelve a validar). Optimista: si falla, vuelve atrás.
+  const toggleExcludedUser = useCallback(async (name) => {
+    const anterior = excludedUsers;
+    const next = anterior.some((x) => mismoNombre(x, name))
+      ? anterior.filter((x) => !mismoNombre(x, name))
+      : [...anterior, name];
+    setExcludedUsers(next);
+    try {
+      const { excluidosAsignacion } = await api.preferencias.guardarEquipo(next);
+      const guardada = Array.isArray(excluidosAsignacion) ? excluidosAsignacion : next;
+      setExcludedUsers(guardada);
+      persistExcluded(guardada);
+    } catch (err) {
+      setExcludedUsers(anterior);
+      throw err;
+    }
+  }, [excludedUsers]);
 
   // Participantes del reparto. `null` = no se definió todavía = participan
   // todos (así nadie se queda sin reparto por no haber tocado nada).
@@ -732,6 +802,10 @@ export function ClientsProvider({ user, userRole, year, month, children }) {
       repartoUsers,
       toggleParticipant,
       swapTeamMembers,
+      allTeamUsers,
+      excludedUsers,
+      excludedSupported,
+      toggleExcludedUser,
       syncingUsers,
       syncTeamUsers,
       suggestRoundRobin,
@@ -774,6 +848,10 @@ export function ClientsProvider({ user, userRole, year, month, children }) {
       repartoUsers,
       toggleParticipant,
       swapTeamMembers,
+      allTeamUsers,
+      excludedUsers,
+      excludedSupported,
+      toggleExcludedUser,
       syncingUsers,
       syncTeamUsers,
       suggestRoundRobin,

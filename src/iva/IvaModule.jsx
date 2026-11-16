@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { useClientsData, useClientsMeta } from '../context/ClientsContext';
-import { compactHeader, findClaveMarangatuColumn } from '../utils';
+import { findClaveMarangatuColumn } from '../utils';
 import {
   DEFAULT_COLORS,
   DIAS_C,
@@ -12,9 +12,10 @@ import {
   exportPeriodoPDF,
   fechaCorta,
   firma,
+  normalizarSitioWeb,
+  sitioWeb,
   gs,
   lastDigit,
-  monthIndexFromSheet,
   normalizeConfig,
   parsePer,
   perLabel,
@@ -26,47 +27,28 @@ import {
   vencAuto,
   vencDe,
   diasRetraso,
-  ym,
 } from './ivaCore';
+import { findDvColumn, findWhatsappColumn, initialPeriodo } from './ivaPeriodo';
 import './iva.css';
+import { fijarSitioWeb } from '../estudio/sitioWeb';
 
 const IvaEditor = lazy(() => import('./IvaEditor'));
 
-// La hoja mensual de la planilla es el mes en que vencen las obligaciones;
-// el IVA que se liquida en ese mes es el del período fiscal anterior.
-// (Hoja "Octubre" → período fiscal septiembre, que vence en octubre.)
-const DESFASE_PERIODO_FISCAL = -1;
 const REFRESH_MS = 60_000;
 
 const ESTADO_TAG = {
   none: ['none', 'Sin cargar'],
   pend: ['pend', 'Pendiente'],
-  env: ['env', 'Enviado'],
+  grupo: ['grupo', 'Al grupo'],
+  env: ['env', 'Al cliente'],
   pres: ['pres', 'Presentado'],
 };
 
-function initialPeriodo(year, month) {
-  const idx = monthIndexFromSheet(month);
-  const yearInSheet = String(month || '').match(/\b(20\d{2})\b/);
-  const y = Number(yearInSheet ? yearInSheet[1] : year);
-  if (idx === null || !y) {
-    const now = new Date();
-    return ym(now.getFullYear(), now.getMonth() + DESFASE_PERIODO_FISCAL);
-  }
-  return ym(y, idx + DESFASE_PERIODO_FISCAL);
-}
 
 function liqKey(ruc, periodo) {
   return ruc + '_' + periodo;
 }
 
-function findDvColumn(headers) {
-  return headers.find((h) => ['dv', 'digitoverificador', 'digito'].includes(compactHeader(h))) || null;
-}
-
-function findWhatsappColumn(headers) {
-  return headers.find((h) => /whats|celular|telef|movil/.test(compactHeader(h))) || null;
-}
 
 // initialRuc: cliente a abrir directamente (acceso desde su detalle). El
 // módulo se monta de nuevo cada vez que se entra a la pestaña.
@@ -472,7 +454,7 @@ function Tablero({
 
       <div className="iva-filters">
         <input type="search" placeholder="Buscar por nombre o RUC" value={query} onChange={(e) => onQuery(e.target.value)} aria-label="Buscar cliente" />
-        {chip('todos', 'Todos')}{chip('none', 'Sin cargar')}{chip('pend', 'Pendientes')}{chip('env', 'Enviados')}{chip('pres', 'Presentados')}
+        {chip('todos', 'Todos')}{chip('none', 'Sin cargar')}{chip('pend', 'Pendientes')}{chip('grupo', 'Al grupo')}{chip('env', 'Al cliente')}{chip('pres', 'Presentados')}
         {dayFilter !== null && <button type="button" className="iva-linkbtn" onClick={() => onDayFilter(null)}>Ver todos los días</button>}
         <button type="button" className="iva-btn iva-push" onClick={onExportPdf} disabled={!visibleRows.length}>
           Exportar PDF{dayFilter !== null ? ' del día ' + vencAuto(config, dayFilter, periodo).fecha.getDate() : ''}
@@ -497,7 +479,7 @@ function AjustesView({ config, canEdit, onSave, toast }) {
     return (
       <div className="iva-panel iva-settings">
         <h2>Colores y feriados</h2>
-        <p>Sólo un administrador puede cambiar los colores, los feriados, los valores de mora y el nombre del estudio.</p>
+        <p>Sólo un administrador puede cambiar los colores, los feriados, los valores de mora y el nombre y sitio web del estudio.</p>
       </div>
     );
   }
@@ -563,7 +545,7 @@ function AjustesView({ config, canEdit, onSave, toast }) {
 
       <div className="iva-panel">
         <h2>Nombre del estudio</h2>
-        <p>Aparece en las fichas y en los PDF que se envían a los clientes.</p>
+        <p>El nombre aparece en las fichas y en los PDF que se envían a los clientes. El sitio web es el enlace «Sitio web del estudio» del sistema (menú lateral, Configuración y pantalla de ingreso).</p>
         <div className="iva-morag">
           <div>
             <label htmlFor="iva-firma">Nombre</label>
@@ -574,6 +556,37 @@ function AjustesView({ config, canEdit, onSave, toast }) {
               onBlur={async (e) => {
                 const value = e.target.value.trim();
                 if (value !== firma(config) && await onSave({ ...config, firma: value })) toast('Nombre guardado');
+              }}
+            />
+          </div>
+          <div>
+            <label htmlFor="iva-sitio">Sitio web</label>
+            <input
+              id="iva-sitio"
+              className="left"
+              type="url"
+              inputMode="url"
+              placeholder="https://www.ejemplo.com.py"
+              defaultValue={sitioWeb(config)}
+              onBlur={async (e) => {
+                const texto = e.target.value.trim();
+                const value = texto ? normalizarSitioWeb(texto) : '';
+                if (texto && !value) {
+                  toast('Esa dirección no es válida (ej.: https://www.ejemplo.com.py)');
+                  e.target.value = sitioWeb(config);
+                  return;
+                }
+                const guardar = value || '';
+                if (guardar === (config.sitioWeb || '')) {
+                  e.target.value = sitioWeb(config);
+                  return;
+                }
+                if (await onSave({ ...config, sitioWeb: guardar })) {
+                  const vigente = sitioWeb({ sitioWeb: guardar });
+                  e.target.value = vigente;
+                  fijarSitioWeb(vigente);
+                  toast(guardar ? 'Sitio web guardado' : 'Se usa el sitio web por defecto');
+                }
               }}
             />
           </div>

@@ -16,7 +16,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGEN_EXT = join(RAIZ, 'Extension');
 const DESTINO = join(RAIZ, 'pruebas', 'Extension-pruebas');
 
-const APP_PRUEBAS = new URL(process.argv[2] || 'https://control-total-clientes-pruebas.vercel.app').origin;
+const APP_PRUEBAS = new URL(process.argv[2] || 'https://sistema-mj.vercel.app').origin;
 const NOMBRE = 'Ekuatia Login PRUEBAS';
 // Clave pública propia de la extensión de pruebas. ID resultante:
 const ID_PRUEBAS = 'hljageieeeljncgmbbpmkflpdminodom';
@@ -49,8 +49,11 @@ writeFileSync(rutaManifest, JSON.stringify(m, null, 2) + '\n');
 // Orígenes aceptados por el service worker
 reemplazar(join(DESTINO, 'background.js'), [["'" + ORIGEN_REAL + "'", "'" + APP_PRUEBAS + "'"]]);
 
-// Nombre visible en el popup
-reemplazar(join(DESTINO, 'popup.html'), [['Ekuatia Login', NOMBRE]]);
+// Nombre visible en el popup (desde la 2.13 la ventana dice sólo «Ekuatia»)
+reemplazar(join(DESTINO, 'popup.html'), [
+  ['<title>Ekuatia</title>', '<title>' + NOMBRE + '</title>'],
+  ['<strong>Ekuatia</strong>', '<strong>Ekuatia PRUEBAS</strong>'],
+]);
 
 writeFileSync(join(DESTINO, 'LEEME-PRUEBAS.txt'),
   'Extensión de PRUEBAS generada automáticamente desde Extension/.\n' +

@@ -221,9 +221,9 @@ function isNetworkFailure(error) {
 
 // Una sola petición, con timeout propio. AbortController (en vez de
 // AbortSignal.timeout) para que funcione también en la WebView de Android.
-async function fetchOnce(url, options) {
+async function fetchOnce(url, options, timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
@@ -262,7 +262,7 @@ async function fetchOnce(url, options) {
   } catch (error) {
     if (error.name === 'AbortError') {
       throw new TransportError(
-        `El servidor no respondió en ${Math.round(REQUEST_TIMEOUT_MS / 1000)} segundos.`,
+        `El servidor no respondió en ${Math.round(timeoutMs / 1000)} segundos.`,
         { retryable: true }
       );
     }
@@ -277,12 +277,12 @@ async function fetchOnce(url, options) {
   }
 }
 
-async function fetchWithRetry(url, options = {}, retries = 3, delay = 400) {
+async function fetchWithRetry(url, options = {}, retries = 3, delay = 400, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      return await fetchOnce(url, options);
+      return await fetchOnce(url, options, timeoutMs);
     } catch (error) {
       lastError = error;
 
@@ -324,7 +324,9 @@ function assertBackendConfig() {
 
 // Todas las operaciones usan POST simple para Apps Script. Cuando existe una
 // sesión, su token se adjunta automáticamente y nunca se toma el rol desde la UI.
-async function request(body, { handleSessionFailure = true } = {}) {
+// `retries: 1` para operaciones que no deben repetirse solas (una consulta
+// a la IA que se cobra, un mensaje de WhatsApp que se envía).
+async function request(body, { handleSessionFailure = true, retries = 3, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   assertBackendConfig();
   const payload = { ...body, token: API_TOKEN };
   if (!payload.sessionToken && currentSession?.token) {
@@ -336,7 +338,7 @@ async function request(body, { handleSessionFailure = true } = {}) {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
-    });
+    }, retries, 400, timeoutMs);
   } catch (error) {
     if (handleSessionFailure && SESSION_ERROR_CODES.has(error.code)) {
       clearStoredSession();
@@ -592,6 +594,53 @@ export const api = {
     return response;
   },
 
+  // Preferencias del usuario que lo siguen en cualquier dispositivo
+  // (AppsScript-Preferencias.gs): ambientación por época y animación.
+  preferencias: {
+    obtener: async () => {
+      const data = await request({ action: 'preferenciasObtener' });
+      return { ambientacion: data.ambientacion || 'ninguna', animacion: data.animacion !== false };
+    },
+    guardar: (cambios) => request({ action: 'preferenciasGuardar', ...cambios }),
+    // Del equipo (iguales para todos): personas excluidas de la asignación.
+    equipo: async () => {
+      const data = await request({ action: 'preferenciasEquipoObtener' });
+      return { excluidosAsignacion: Array.isArray(data.excluidosAsignacion) ? data.excluidosAsignacion : [] };
+    },
+    guardarEquipo: (excluidosAsignacion) => request({ action: 'preferenciasEquipoGuardar', excluidosAsignacion }),
+  },
+
+  // Libros IVA de compras y ventas importados de SIGA (AppsScript-Libros.gs).
+  // guardar() con un libro ya cargado (mismo cliente + mes + tipo) falla con
+  // code LIBRO_EXISTE y error.details.existente; se repite con reemplazar.
+  libros: {
+    listar: async (ruc = '') => {
+      const data = await request({ action: 'librosListar', ruc });
+      return Array.isArray(data.libros) ? data.libros : [];
+    },
+    leer: async (id) => {
+      const data = await request({ action: 'librosLeer', id });
+      return data.libro;
+    },
+    guardar: (libro) => request({ action: 'librosGuardar', ...libro }),
+    eliminar: (id) => request({ action: 'librosEliminar', id }),
+  },
+
+    // Sugerencias para mejorar el sistema (AppsScript-Sugerencias.gs). Cada
+  // usuario ve las suyas; ADMINISTRADOR y SUPERUSUARIO ven todas.
+  sugerencias: {
+    listar: async () => {
+      const data = await request({ action: 'sugerenciasListar' });
+      return {
+        admin: data.admin === true,
+        sugerencias: Array.isArray(data.sugerencias) ? data.sugerencias : [],
+        nuevas: Number(data.nuevas) || 0,
+      };
+    },
+    crear: ({ tipo, texto, seccion }) => request({ action: 'sugerenciasCrear', tipo, texto, seccion }),
+    cambiarEstado: (ids, estado) => request({ action: 'sugerenciasEstado', ids, estado }),
+  },
+
   // Buzón: avisos de documentación recibida para el Encargado de cada
   // cliente (AppsScript-Avisos.gs). Cada usuario ve y marca sólo los suyos.
   avisos: {
@@ -627,6 +676,28 @@ export const api = {
       request({ action: 'ivaSaveDoc', periodo, ruc, data, resumen }),
     saveCliente: (ruc, data) => request({ action: 'ivaSaveCliente', ruc, data }),
     saveConfig: (data) => request({ action: 'ivaSaveConfig', data }),
+  },
+
+  // Asistente con IA (AppsScript-Agente.gs). El servidor guarda la clave y
+  // llama a la API de Claude; las herramientas corren en la app.
+  agente: {
+    estado: () => request({ action: 'agenteEstado' }),
+    mensaje: ({ system, tools, messages }) =>
+      request({ action: 'agenteMensaje', system, tools, messages }, { retries: 1, timeoutMs: 90000 }),
+  },
+
+  // Whaticket (AppsScript-Whaticket.gs): ficha IVA al cliente o al grupo
+  // contable, y el chat del cliente dentro del sistema. El token vive en el
+  // servidor; envíos sin reintentos automáticos para no duplicar mensajes.
+  whaticket: {
+    enviar: ({ destino = 'cliente', numero, texto, imagen, nombreArchivo, cliente, ruc, periodo, forzar = false }) =>
+      request(
+        { action: 'whaticketEnviar', destino, numero, texto, imagen, nombreArchivo, cliente, ruc, periodo, forzar },
+        { retries: 1, timeoutMs: 90000 }
+      ),
+    chat: ({ numero, cursor, cursorId }) => request({ action: 'whaticketChat', numero, cursor, cursorId }, { timeoutMs: 30000 }),
+    responder: ({ numero, texto, cliente, ruc }) =>
+      request({ action: 'whaticketResponder', numero, texto, cliente, ruc }, { retries: 1, timeoutMs: 60000 }),
   },
 
   // Lotes CDC para descarga de XML (AppsScript-CdcLotes.gs). El lote lo crea

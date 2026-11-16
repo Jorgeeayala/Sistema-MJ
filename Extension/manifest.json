@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Ekuatia Login",
-  "version": "2.14",
+  "version": "2.15",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyMDranhrfclMlSvYWS0T7Pdol3hCXB3+hQxQge2X0ActDUa7Y8Mo7CrSa3BkdJMJFtpIl3yfArXmw30jzmffSuUy7YhshauOwtWrmkbpYWzAdn731BzN2AmnFyR/IuzRA550En+djM+CTy0OTkGrcyqFQgaU+tL0u3vTZ1YaBHcpBdylGWV7t4yglkgVY3HfcRtN+vRfImIyB0fNAXT0vRU5iUDvVN3TQDfFnPq/B3ECR8WYL1TUkgjTauREZBydgPdMk/NgkFaZVyZhZzSbJeu13oxQYOKoxEAj2znPea/tYv/nXcgFW0Sy7ggSwbwR460yKyV/gRYzHSipSEoEIwIDAQAB",
   "description": "Puente de Control Clientes: login y Formulario 120 en Marangatu, descarga de formularios IVA y envío de la ficha por WhatsApp Web",
   "permissions": [
     "scripting",
     "tabs",
-    "storage"
+    "storage",
+    "contentSettings"
   ],
   "host_permissions": [
     "https://marangatu.set.gov.py/*",
@@ -19,17 +20,27 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Ekuatia Login",
+    "default_title": "Ekuatia",
     "default_popup": "popup.html",
-    "default_icon": "logo.png"
+    "default_icon": {
+      "16": "icono-16.png",
+      "32": "icono-32.png",
+      "48": "icono-48.png",
+      "128": "icono-128.png"
+    }
   },
   "icons": {
-    "128": "logo.png"
+    "16": "icono-16.png",
+    "32": "icono-32.png",
+    "48": "icono-48.png",
+    "128": "icono-128.png"
   },
   "externally_connectable": {
     "matches": [
       "http://localhost/*",
-      "https://control-total-clientes-iva.vercel.app/*"
+      "https://control-total-clientes.vercel.app/*",
+      "https://control-total-clientes-iva.vercel.app/*",
+      "https://sistema-mj.vercel.app/*"
     ]
   },
   "content_scripts": [
@@ -58,6 +69,18 @@
         "ekuatiaPagina.js",
         "ekuatiaUi.js"
       ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://marangatu.set.gov.py/*"
+      ],
+      "js": [
+        "formulario120.js",
+        "ivaContent.js"
+      ],
+      "all_frames": true,
+      "match_origin_as_fallback": true,
       "run_at": "document_idle"
     }
   ]

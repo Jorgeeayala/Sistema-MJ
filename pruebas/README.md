@@ -1,6 +1,6 @@
 # Entorno de pruebas
 
-Este repositorio (`mauro-rojas-corp/control-total-clientes-iva-pruebas`) es
+Este repositorio (`mauro-rojas-corp/Sistema-MJ`) es
 una **copia** de `MJEstudioContable/Control-Total-Clientes-IVA` para probar
 cambios sin tocar el original. Lo que funciona acá se pasa después al
 original.
@@ -36,6 +36,15 @@ original.
 | ------ | ----------- | ------ | ------------------ |
 | —      | Copia inicial del original (`5f250f6`, 05/11/2026) | — | — |
 | CAMBIO-1 | Ficha del cliente rediseñada (documentación recibida + aviso al Encargado) y Buzón con campana | En prueba | No |
+| CAMBIO-2 | Guía interactiva del sistema (botón «?» y automática la primera vez) | En prueba | No |
+| CAMBIO-3 | Sugerencias de los usuarios (lamparita junto al Buzón); el administrador las ve con el nombre | En prueba | No |
+| CAMBIO-4 | Ambientación por época (fechas especiales y estaciones), guardada por usuario | En prueba | No |
+| CAMBIO-5 | Traído de `Jorgeeayala/Sistema-MJ`: actualizar usuarios en «¿Quién sos?» y columnas parejas en la lista de clientes | En prueba | No |
+| CAMBIO-6 | Cada hoja vence el mes siguiente (hoja OCTUBRE → noviembre): ficha, días de retraso y Vencimientos IVA | En prueba | No |
+| CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
+| CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
+| CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
+| CAMBIO-15 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 | En prueba (falta backend CDC) | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -66,8 +75,10 @@ Qué revisar:
   **Registrar recepción y avisar**. En la planilla deben quedar `✓` (o
   `✓ resumen`), la observación y la fecha del día.
 - Se registra aunque el cliente no tenga Encargado (sin aviso).
-- Retraso de la documentación (ficha): los papeles deben llegar hasta el
-  día del vencimiento (VENC. 0 → 7/11; el 8/11 ya es 1 día). Si todavía no
+- Retraso de la documentación (ficha): cada hoja es el mes de los
+  documentos y vence el mes siguiente (hoja OCTUBRE → VENC. 0 el 7/11,
+  VENC. 3 el 13/11). Los papeles deben llegar hasta ese día; el 8/11 ya es
+  1 día de retraso para VENC. 0. Si todavía no
   llegaron, "Documentación pendiente: N días de retraso" (hasta hoy); una
   vez registrada la llegada (columna Fecha), "Llegó con N días de retraso"
   queda fijo en esa fecha. Si llegó a tiempo, no aparece nada. El aviso del
@@ -82,14 +93,242 @@ Qué revisar:
   abrir el aviso (queda leído y abre la ficha), filtros y "Marcar todo".
 
 
+### CAMBIO-2 · Guía interactiva
+
+Archivos: `src/components/GuidedTour.jsx` (nuevo), `src/guia/pasosGuia.jsx`
+(nuevo: el texto de cada paso), `src/App.jsx` (botón «?» y apertura) y
+`src/ui-executive/recepcion-buzon.css` (estilos `rx-tour-*`). No toca Apps
+Script ni la extensión.
+
+Qué revisar:
+- La primera vez que cada usuario entra a un período, la guía arranca sola
+  (se recuerda por usuario en ese dispositivo).
+- Recorre Estadísticas, Clientes, la ficha, Vencimientos IVA y la barra de
+  arriba; ADMINISTRADOR y SUPERUSUARIO ven además Asignar y Marcaciones
+  (USUARIO: 20 pasos; administradores: 22).
+- Oscurece la pantalla e ilumina el elemento del que habla; cambia sola de
+  sección. En el celular apunta a la barra de abajo.
+- Botones Anterior / Siguiente / Saltar guía, teclas ← → Enter y Esc.
+- Al terminar vuelve a Clientes; el botón **?** de la barra la repite.
+- Entra de verdad a cada parte: abre la ficha del primer cliente (cabecera y
+  Registro de documentación) y su liquidación de IVA (formulario y ficha para
+  el cliente), sin cambiar nada, y vuelve sola con «Volver» al seguir o al
+  ir hacia atrás. Espera hasta 12 s a que cargue cada sección («Abriendo
+  esta parte del sistema…»), pensado para la planilla real de Google.
+- En el celular la tarjeta es compacta, va abajo y no tapa lo iluminado.
+
+### CAMBIO-3 · Sugerencias
+
+Archivos: `AppsScript-Sugerencias.gs` (nuevo), `AppsScript-Avisos.gs` (deriva
+las acciones `sugerencias*`, así no se toca `Code.gs`),
+`src/components/SugerenciasPanel.jsx` y `src/hooks/useSugerencias.js`
+(nuevos), `src/App.jsx`, `src/api.js`, `src/guia/pasosGuia.jsx` (paso nuevo),
+`src/ui-executive/recepcion-buzon.css` y `tools/smoke/server.mjs`.
+
+Para probarlo con tu Apps Script:
+1. **+ → Secuencia de comandos** llamada `Sugerencias` y pegá
+   `AppsScript-Sugerencias.gs`.
+2. En el archivo `Avisos`, reemplazá todo por el `AppsScript-Avisos.gs` nuevo.
+3. **Implementar → Administrar implementaciones → editar → Nueva versión**.
+   La hoja `Sugerencias` se crea sola en la planilla de administración.
+
+Qué revisar:
+- Lamparita al lado de la campana; abre una ventanita debajo.
+- Usuario: elige Recomendación / Fallo / Consejo / Otro, escribe (hasta 1500
+  caracteres) y envía. En **Mis sugerencias** ve si quedó Enviada, Vista por
+  el administrador o Resuelta. Sólo ve las suyas.
+- ADMINISTRADOR y SUPERUSUARIO: número rojo con las nuevas; en **Recibidas**
+  ven todas con el nombre de quien la escribió, la fecha y la sección donde
+  estaba; filtros Pendientes / Resueltas / Todas y por tipo; **Marcar
+  resuelta** y **Reabrir**. Al abrir Recibidas, las nuevas pasan a vistas.
+- En la planilla, hoja `Sugerencias`: una fila por sugerencia con usuario,
+  rol, tipo, sección, texto, estado y quién la revisó.
+
+### CAMBIO-4 · Ambientación por época
+
+Archivos: `AppsScript-Preferencias.gs` (nuevo), `AppsScript-Avisos.gs` (deriva
+las acciones `preferencias*`), `src/ambiente/ambientes.js`,
+`src/ambiente/AmbienteIntro.jsx`, `src/ambiente/ambiente.css` y
+`src/hooks/useAmbiente.js` (nuevos), `src/App.jsx`,
+`src/components/SettingsDialog.jsx`, `src/api.js`, `src/guia/pasosGuia.jsx`
+y `tools/smoke/server.mjs` (con `AMBIENTE=navidad` arranca con esa).
+
+Para probarlo con tu Apps Script:
+1. **+ → Secuencia de comandos** llamada `Preferencias` y pegá
+   `AppsScript-Preferencias.gs`.
+2. En el archivo `Avisos`, reemplazá todo por el `AppsScript-Avisos.gs` nuevo.
+3. **Implementar → Administrar implementaciones → editar → Nueva versión**.
+   La hoja `Preferencias` se crea sola (una fila por usuario).
+
+Qué revisar:
+- Configuración → **Ambientación** (un solo selector desplegable; la casilla
+  de animación aparece sólo si hay una elegida): Ninguna (por defecto),
+  Automática, y a mano: Navidad (1–26/12), Año Nuevo (27/12–2/1), Semana Santa (Ramos a
+  Pascua, se calcula cada año), Independencia (10–15/5), San Juan (16–30/6),
+  Verano (21/12–20/3), Otoño (21/3–20/6), Invierno (21/6–20/9) y Primavera
+  (21/9–20/12). En Automática las fechas especiales ganan a la estación.
+- Cambia los acentos (botones, menú), el panel de Estadísticas, un adorno al
+  pie de la barra (guirnalda de luces en Navidad, franja tricolor en
+  Independencia…) y un saludo «¡Felices fiestas, Nombre!» (en el celular,
+  sólo el ícono). Los colores de vencimiento y los estados no cambian.
+- Animación al ingresar: pocos copos, hojas o confeti repartidos en toda la
+  pantalla (PC y celular) durante unos 6 segundos, sin bloquear la pantalla. Una vez por ingreso (no al recargar),
+  se puede apagar y no aparece si el dispositivo pide reducir el movimiento.
+  Al elegir una ambientación se muestra como vista previa.
+- Se guarda en el usuario: la misma elección en la PC y en el celular; cada
+  usuario tiene la suya.
+
+### CAMBIO-5 · Cambios de `Jorgeeayala/Sistema-MJ`
+
+Ese repositorio es una copia de este en el `9c1175b` (06/11) con 3 archivos
+propios, que se trajeron tal cual (no los habíamos tocado después):
+- `src/screens/NamePicker.jsx`: botón ↻ junto a «¿Quién sos?» que vuelve a
+  leer la hoja Usuarios sin perder la lista visible; nombres largos en
+  varias líneas.
+- `src/styles.css`: estilos de esa pantalla.
+- `src/ui-executive/preview.css`: columnas de la lista de clientes con una
+  sola plantilla (más parejas y livianas).
+
+### CAMBIO-6 · La hoja es el mes de los documentos
+
+Antes (como en el original) cada hoja era el mes en que vencía: la hoja
+OCTUBRE vencía en octubre y abría en Vencimientos IVA el período septiembre.
+Ahora la hoja es el mes de los documentos y vence el mes siguiente:
+- Hoja OCTUBRE 2026 → período fiscal octubre 2026 → VENC. 0 el 7/11,
+  VENC. 3 el 13/11 … VENC. 9 el 25/11.
+- Ficha: chip VENC., días de retraso y la llegada (cuenta desde el 1/11).
+- Vencimientos IVA abre el período de la hoja («Octubre 2026 · Vence en
+  noviembre 2026»); sin hoja elegida abre el mes anterior al actual.
+- Las liquidaciones se guardan por período, así que no se mueve ningún dato.
+
+Archivos: `src/iva/ivaCore.js` (`periodoFiscalDeHoja`), `src/iva/IvaModule.jsx`,
+`src/screens/ClientDetail.jsx` y `src/guia/pasosGuia.jsx` (texto).
+
+### CAMBIO-7 · Extensión 2.9: flujo del Formulario 120
+
+Archivos: `Extension/` (`background.js`, `sesionBg.js`, `panelContent.js`,
+`descargaContent.js`, `descargaBg.js`, `ivaContent.js` nuevo, `manifest.json`,
+`README.md`) y los pasos que muestra la app (`src/iva/IvaEditor.jsx`).
+
+Qué se corrigió:
+- **Cerrar sesión no se ejecutaba:** `descargaContent.js` contestaba a todos
+  los mensajes y tapaba al panel; la extensión creía que no había sesión.
+  Además el panel hacía clic en «Salir» antes de responder (la respuesta se
+  perdía con el cambio de página).
+- **Otro cliente / mismo cliente:** recuerda con qué RUC entró; mismo cliente
+  → reutiliza la sesión; otro → cierra la sesión (desde la ventana que tenga
+  el menú o con la dirección de salida) y las pestañas del cliente anterior.
+- **Cierre de sesión (2.10):** menú principal `/eset/` → «Salir»
+  (`/eset/logout`), como en el portal real, y se cierran todas las demás
+  ventanas de Marangatu de esa sesión (también desde el panel y la app).
+- **Ventanas:** «Presentar Declaración» se abre en la misma ventana o en una
+  nueva según el enlace de Marangatu.
+- **Contexto del formulario:** `ivaContent.js` corre en todas las ventanas y
+  marcos de Marangatu, elige 211 · Mensual · año · mes y espera a que aparezca
+  el formulario (después de «Abrir declaración») para completarlo.
+
+- **2.11:** «Salir» al primer intento (la respuesta del clic se perdía con
+  el cambio de página) y el botón «Cerrar» de la declaración funciona (la
+  ventana la abre la propia página de Marangatu; ventanas emergentes
+  permitidas sólo para marangatu.set.gov.py).
+
+- **2.12:** cerrar sesión con UN clic: «Salir» se pulsa apenas aparece (sin
+  esperar la carga completa de la página, que en el portal real tarda) y el
+  botón del panel queda en «Cerrando sesión…» hasta terminar.
+
+Simulador: `pruebas/extension-sim/flujo-iva.mjs` (ver Extension/README.md).
+Probado con un Marangatu simulado (acceso, menú del usuario con «Cerrar
+sesión» escondido, «Presentar Declaración» en ventana nueva o en la misma,
+formulario en la misma pantalla o en otra ventana, ventana sin menú): cliente
+nuevo, mismo cliente, otro cliente desde una ventana sin menú, sesión
+iniciada a mano y cierre desde la app.
+
+### CAMBIO-8 · Sitio web del estudio
+
+- Enlace discreto «Sitio web del estudio» (se abre en otra pestaña): al pie
+  del menú lateral (PC), en **Configuración → Estudio** (PC y celular) y al
+  pie de la pantalla «¿Quién sos?».
+- Por defecto `https://mj-estudio-contable.lovable.app`. Un administrador lo
+  cambia en **Vencimientos IVA → Colores y feriados → Nombre del estudio →
+  Sitio web** (acepta `www.dominio.com.py`; vacío vuelve al de Lovable). Se
+  guarda en la configuración de IVA (planilla), sin publicar de nuevo ni
+  tocar Apps Script.
+
+Archivos: `src/estudio/` (nuevo), `src/iva/ivaCore.js`, `src/iva/IvaModule.jsx`,
+`src/components/DesktopSidebar.jsx`, `src/components/SettingsDialog.jsx`,
+`src/screens/NamePicker.jsx`, `src/App.jsx`, `src/guia/pasosGuia.jsx`.
+
+### CAMBIO-9 · Libros IVA (compras y ventas de SIGA)
+
+Sección nueva **Libros IVA** («Libros» en el celular), para todos los usuarios.
+- **Importar libro:** el Excel (o CSV) que exporta SIGA desde *Libro Iva
+  Compra/Venta → Exportar Consulta*. Detecta compras o ventas, el mes, el
+  año y el nombre del cliente del archivo, y propone el cliente de la lista
+  (se puede cambiar; avisa si no se parece). Compara los totales leídos con
+  la fila TOTAL del archivo antes de guardar. Un libro por cliente + mes +
+  tipo: si ya existe, avisa quién lo importó y pregunta si reemplazarlo.
+- **Consultar:** cliente + año → los 12 meses con Compras y Ventas (cargado o
+  no); al abrir uno: resumen (gravadas, IVA, exentas, total), detalle con
+  búsqueda por proveedor/cliente, RUC o documento, fila de totales, anulados
+  tachados, cambio Compras ↔ Ventas y descarga en Excel.
+- Eliminar: sólo ADMINISTRADOR y SUPERUSUARIO.
+
+Para probarlo con tu Apps Script:
+1. **+ → Secuencia de comandos** llamada `Libros` y pegá `AppsScript-Libros.gs`.
+2. En `Avisos`, reemplazá todo por el `AppsScript-Avisos.gs` nuevo.
+3. **Implementar → Administrar implementaciones → editar → Nueva versión**.
+   La hoja `Libros IVA` se crea sola (una fila por libro; el detalle va
+   repartido en celdas de hasta 45.000 caracteres).
+
+Archivos: `AppsScript-Libros.gs` (nuevo), `AppsScript-Avisos.gs`,
+`src/libros/` (nuevo), `src/api.js`, `src/App.jsx`,
+`src/components/DesktopSidebar.jsx`, `src/components/MobileTabBar.jsx`,
+`src/guia/pasosGuia.jsx`, `tools/smoke/server.mjs`.
+
+### CAMBIO-15 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
+
+Unificación con el commit `dd191c3` de `Jorgeeayala/Sistema-MJ`
+(«Actualizacion De Version Modulo XML/KUDE»), aplicado sobre CAMBIO-13.
+Esa copia partía de CAMBIO-1 + lo traído en CAMBIO-5, así que lo único nuevo
+era este commit.
+
+- Pestaña «XML / KuDE» (junto a «Libros IVA»): cargar XML SIFEN, ver el KuDE
+  e imprimirlo; «Imprimir todo» empaqueta de a 2 facturas cortas por hoja
+  Oficio.
+- Configuración → «Lotes XML (CDC)»: registrar los lotes de CDC que la
+  extensión junta en Marangatu / eKuatia.
+- Extensión **2.15** (2.13 de acá con el ícono MJ y la ventana nueva + 2.14 de
+  Jorge): recolector de CDC en Marangatu y eKuatia, y descarga directa de XML
+  (usa un servicio de captcha con clave propia: pestaña **Descargas** de la
+  ventana de la extensión). Acepta las tres apps:
+  `control-total-clientes`, `control-total-clientes-iva` y `sistema-mj`.
+- Dependencias nuevas: `qrcode`, Tailwind 4 (sólo para `src/xml/xml.css`,
+  sin preflight) y TypeScript. Hace falta `npm install`.
+- XML de ejemplo para probar el KuDE: `pruebas/xml-kude/factura-prueba.xml`
+  (factura de ₲ 131.000).
+
+**Pendiente:** el backend de los lotes (`AppsScript-CdcLotes.gs`, acciones
+`cdcCrearLote`, `cdcListarLotes`, `cdcObtenerItems`, `cdcObtenerXml`,
+`cdcSubirXml`, `cdcReintentarFallidos`, `cdcBorrarLote`) **no está en el
+repositorio de Jorge**. Hasta sumarlo, «Lotes XML (CDC)» y lo que trae XML
+desde Drive dan error; cargar XML a mano e imprimir el KuDE funcionan igual.
+Tampoco se agregó todavía la pestaña XML a la guía interactiva
+(`src/guia/pasosGuia.jsx`).
+
+Archivos: `src/xml/` y `src/cdc/` (nuevos), `tsconfig.json`, `package.json`,
+`package-lock.json`, `vite.config.js`, `src/App.jsx`, `src/api.js`,
+`src/marangatu.js`, `src/styles.css`, `src/components/DesktopSidebar.jsx`,
+`src/components/MobileTabBar.jsx`, `src/components/SettingsDialog.jsx`,
+`Extension/` (manifest, background, popup y 10 archivos nuevos).
+
 ## Las tres piezas separadas
 
 | Pieza | Real | Pruebas |
 | ----- | ---- | ------- |
 | Código | `MJEstudioContable/Control-Total-Clientes-IVA` | este repositorio |
-| App | `https://control-total-clientes.vercel.app` | `https://control-total-clientes-pruebas.vercel.app` |
+| App | `https://control-total-clientes.vercel.app` | `https://sistema-mj.vercel.app` |
 | Backend | Apps Script y planillas reales | proyecto `Control Total PRUEBAS` y planillas `PRUEBAS - …` con datos ficticios |
-| Extensión | Ekuatia Login · `dffknnjnidhfldehfalchalikfkjbehm` | Ekuatia Login PRUEBAS · `hljageieeeljncgmbbpmkflpdminodom` |
+| Extensión | Ekuatia Login · `dffknnjnidhfldehfalchalikfkjbehm` | la misma (`Extension/`, ID fijo `dffknnjnidhfldehfalchalikfkjbehm`), que también acepta `https://sistema-mj.vercel.app`. `pruebas/Extension-pruebas` (`hljage…`) queda como alternativa |
 
 ## Armado (una sola vez)
 
@@ -128,14 +367,13 @@ instalador.
 ### 2. App de pruebas (Vercel)
 
 1. En <https://vercel.com/new>, importá
-   `mauro-rojas-corp/control-total-clientes-iva-pruebas`.
-2. **Project name:** `control-total-clientes-pruebas` (así la dirección es
-   `https://control-total-clientes-pruebas.vercel.app`; si Vercel da otra,
-   avisá para regenerar la extensión con esa).
+   `mauro-rojas-corp/Sistema-MJ`.
+2. Dirección fija: en **Settings → Domains** del proyecto, `sistema-mj.vercel.app`
+   (si se cambia, regenerar la extensión con la nueva; ver abajo).
 3. **Environment Variables:**
    - `VITE_BACKEND_URL` = URL `…/exec` del Apps Script **de pruebas**
    - `VITE_API_TOKEN` = el `API_TOKEN` **de pruebas**
-   - `VITE_MARANGATU_EXT_ID` = `hljageieeeljncgmbbpmkflpdminodom`
+   - `VITE_MARANGATU_EXT_ID` = `dffknnjnidhfldehfalchalikfkjbehm` (la extensión de `Extension/`)
 4. **Deploy.** Usar siempre la dirección fija, no las de cada deploy.
 
 ### 3. Extensión de pruebas (Chrome)
@@ -153,7 +391,7 @@ Para regenerarla (después de tocar `Extension/`, o si cambia la dirección de
 la app de pruebas):
 
 ```
-node pruebas/generar-extension.mjs https://control-total-clientes-pruebas.vercel.app
+node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 ```
 
 ## Ojo: lo que las pruebas NO aíslan

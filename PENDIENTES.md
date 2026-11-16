@@ -14,12 +14,19 @@ Estado de referencia: autenticación individual y configuración inicial de PIN 
     - `ALLOW_SELF_PIN_SETUP=false`
     - `ALLOW_PINLESS_LOGIN=false`
 
-- [ ] **Rotar el token global que sigue vigente durante testing.**
-  1. Generar un token nuevo fuera del repositorio.
-  2. Actualizar `API_TOKEN` en Script Properties.
-  3. Actualizar `VITE_API_TOKEN` en el `.env` local.
-  4. Recompilar frontend y APK.
-  5. Retirar las compilaciones que contienen el token anterior.
+- [ ] **Rotar el token global que sigue vigente durante testing** (sin cortar el servicio).
+  El servidor acepta `API_TOKEN` y, mientras exista, también `API_TOKEN_ANTERIOR`.
+  1. Reemplazar `isAuthorized` en `Código.gs` por la versión de
+     `AppsScript-Code-auth-PROPUESTA.gs` y publicar una **Nueva versión**.
+  2. Generar un token nuevo largo y aleatorio fuera del repositorio (32+ caracteres).
+  3. Script Properties: crear `API_TOKEN_ANTERIOR` con el valor actual y poner el
+     nuevo en `API_TOKEN`. Desde acá funcionan las dos.
+  4. Vercel → Settings → Environment Variables → `VITE_API_TOKEN` = nuevo →
+     Redeploy de `main`.
+  5. `.env` local con el nuevo y compilar el APK (ver "Aplicación Android").
+  6. Cuando todos tengan el APK nuevo, borrar `API_TOKEN_ANTERIOR`.
+  Nota: `VITE_API_TOKEN` viaja dentro de la app publicada, así que no es un
+  secreto fuerte; la protección real son los PIN y las sesiones individuales.
 
 - [ ] **Validar la política de sesión completa.**
   - Cinco PIN incorrectos bloquean durante 15 minutos.
@@ -66,7 +73,8 @@ Estado de referencia: autenticación individual y configuración inicial de PIN 
 
 ## Aplicación Android
 
-- [ ] Incrementar `versionCode` y `versionName` antes de distribuir una actualización.
+- [x] Incrementar `versionCode` y `versionName` antes de distribuir una actualización
+      (1.1 / código 2: asistente, Whaticket, estados y excluir).
 - [ ] Ejecutar `npm run build` con el `.env` correcto.
 - [ ] Ejecutar `npx cap sync android`.
 - [ ] Compilar, firmar e instalar un APK actualizado desde Android Studio.
@@ -239,3 +247,18 @@ abre el chat sin recargar, pega texto e imagen y queda la vista previa.
 - [ ] Con WhatsApp Web cerrado: debe abrirse una sola pestaña y completar.
 - [ ] Si alguna vez vuelve a recargar la pestaña, WhatsApp cambió sus
   funciones internas: revisar los nombres de módulo en `operarWhatsapp`.
+
+## Asistente con IA y envío por Whaticket
+
+- [x] Clave de la API de Claude: organización «MJ Estudio Contable» con los créditos del
+      plan Max, workspace «MJ sistemático» con tope de US$10/mes, cuenta de servicio `sistema-mj`.
+- [x] Token de Whaticket «Sistema MJ» con el perfil «API Sistema MJ».
+- [x] `AppsScript-Agente.gs`, `AppsScript-Whaticket.gs` y `AppsScript-Avisos.gs` pegados;
+      `probarAsistente` y `probarWhaticket` correctos (14/11/2026).
+- [x] Frontend publicado en Vercel (CAMBIO-10, 11 y 12).
+- [ ] `AppsScript-Preferencias.gs` actualizado (botón «Excluir» de Asignar clientes).
+- [ ] Recompilar el APK.
+- [ ] Mandar una ficha de prueba a un número propio (Al cliente) y al grupo contable;
+      confirmar en Whaticket que llegan la imagen y el texto como pie.
+- [ ] Probar el asistente con cada rol y revisar las hojas `Agente Uso` y `Whaticket Envíos`
+      la primera semana.
