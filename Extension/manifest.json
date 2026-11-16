@@ -20,12 +20,20 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Ekuatia Login",
+    "default_title": "Ekuatia",
     "default_popup": "popup.html",
-    "default_icon": "logo.png"
+    "default_icon": {
+      "16": "icono-16.png",
+      "32": "icono-32.png",
+      "48": "icono-48.png",
+      "128": "icono-128.png"
+    }
   },
   "icons": {
-    "128": "logo.png"
+    "16": "icono-16.png",
+    "32": "icono-32.png",
+    "48": "icono-48.png",
+    "128": "icono-128.png"
   },
   "externally_connectable": {
     "matches": [
