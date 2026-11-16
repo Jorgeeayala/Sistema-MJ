@@ -15,7 +15,7 @@
 // descargaBg.js, que comparte el ámbito global de este archivo. La pestaña de
 // trabajo, el cierre de sesión y el estado compartido con la app viven en
 // sesionBg.js.
-importScripts('formulario120.js', 'sesionBg.js', 'descargaBg.js', 'whatsappBg.js');
+importScripts('formulario120.js', 'sesionBg.js', 'descargaBg.js', 'whatsappBg.js', 'cdcLotesBg.js', 'descargaDirectaBg.js');
 
 const LOGIN_URL = 'https://marangatu.set.gov.py/eset/login';
 const MARANGATU_HOST = 'marangatu.set.gov.py';
@@ -31,7 +31,7 @@ const MAX_CASILLAS = 120;
 // Vercel (otro subdominio en cada deploy) no se agregan a propósito.
 const ALLOWED_APP_ORIGINS = new Set([
   'http://localhost:3000',
-  'https://control-total-clientes.vercel.app',
+  'https://control-total-clientes-iva.vercel.app',
 ]);
 
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {

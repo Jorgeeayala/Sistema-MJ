@@ -1,9 +1,10 @@
-import { BarChart3, Clock, Receipt, UserCog, Users } from 'lucide-react';
+import { BarChart3, Clock, FileCode2, Receipt, UserCog, Users } from 'lucide-react';
 
 const ITEMS = [
   { id: 'stats', label: 'Estadísticas', description: 'Avance y métricas', Icon: BarChart3 },
   { id: 'clients', label: 'Clientes', description: 'Cartera del período', Icon: Users },
   { id: 'iva', label: 'Vencimientos IVA', description: 'Liquidación y ficha', Icon: Receipt },
+  { id: 'xml', label: 'XML / KuDE', description: 'Comprobantes e impresión', Icon: FileCode2 },
   { id: 'assign', label: 'Asignar clientes', description: 'Equipo y reparto', Icon: UserCog, requiresAssign: true },
   // requiresAssign = sólo ADMINISTRADOR y SUPERUSUARIO (misma regla que 'Asignar clientes').
   { id: 'marcaciones', label: 'Marcaciones', description: 'Horas a favor y en contra', Icon: Clock, requiresAssign: true },

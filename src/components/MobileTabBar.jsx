@@ -1,9 +1,10 @@
-import { BarChart3, Clock, Receipt, UserCog, Users } from 'lucide-react';
+import { BarChart3, Clock, FileCode2, Receipt, UserCog, Users } from 'lucide-react';
 
 const TABS = [
   { id: 'stats', label: 'Estadísticas', Icon: BarChart3 },
   { id: 'clients', label: 'Clientes', Icon: Users },
   { id: 'iva', label: 'IVA', Icon: Receipt },
+  { id: 'xml', label: 'XML', Icon: FileCode2 },
   { id: 'assign', label: 'Asignar', Icon: UserCog, requiresAssign: true },
   { id: 'marcaciones', label: 'Horas', Icon: Clock, requiresAssign: true },
 ];

@@ -1,0 +1,28 @@
+REVERSIÓN — quitar el dúo automático + «Imprimir todo»
+=======================================================
+Vuelve la pestaña XML / KuDE a la versión aprobada anterior:
+cargar XML -> ver KuDE -> «Imprimir KuDE» individual.
+
+CÓMO APLICARLO (Windows, CMD)
+-----------------------------
+1) Descomprimí este zip.
+2) Copiá la carpeta src sobre tu Sistema-MJ, aceptando «Reemplazar»
+   (se reemplazan XmlToolModule.jsx y xml.css dentro de src\xml).
+3) Para completar la limpieza, borrá estos 3 archivos que la
+   actualización del dúo había agregado (si no los borrás no rompen
+   nada, pero ya no se usan):
+
+     src\xml\types\paper.ts
+     src\xml\utils\batchPacking.ts
+     src\xml\components\DuoPrintSheet.tsx
+
+4) No cambian dependencias: no hace falta npm install. Solo
+   reiniciá el servidor:
+
+     npm run dev
+
+RESULTADO ESPERADO
+------------------
+En la pestaña XML / KuDE ya no aparece el botón «Imprimir todo»
+ni el resumen de empaquetado; queda solo «Imprimir KuDE» del
+documento seleccionado, como estaba antes.

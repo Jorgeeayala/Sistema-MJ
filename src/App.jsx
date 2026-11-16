@@ -14,6 +14,7 @@ const NewClient = lazy(() => import('./screens/NewClient'));
 const AssignClients = lazy(() => import('./screens/AssignClients'));
 const IvaModule = lazy(() => import('./iva/IvaModule'));
 const MarcacionesModule = lazy(() => import('./marcaciones/MarcacionesModule'));
+const XmlToolModule = lazy(() => import('./xml/XmlToolModule'));
 // La planilla de marcaciones cargada se descarta al cerrar sesión o cambiar de usuario.
 onPrivateDataCleared(olvidarPlanilla);
 import AppSplashLoader from './components/AppSplashLoader';
@@ -738,7 +739,7 @@ export default function App({
                 <span>Sincronizando…</span>
               </span>
             )}
-            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && (
+            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && mobileTab !== 'xml' && (
               <button
                 type="button"
                 className="real-exec-refresh-button"
@@ -1308,6 +1309,14 @@ function PeriodScreens({
             withDesktopSidebar={!isMobilePeriodNav}
             initialRuc={ivaOpenRuc}
           />
+        </motion.div>
+      );
+    }
+
+    if (usePeriodTabs && mobileTab === 'xml') {
+      return (
+        <motion.div key={`xml-${year}-${month}`} variants={pageVariants} initial="initial" animate="animate" exit="exit">
+          <XmlToolModule withDesktopSidebar={!isMobilePeriodNav} />
         </motion.div>
       );
     }
