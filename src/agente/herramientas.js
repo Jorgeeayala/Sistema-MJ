@@ -120,7 +120,7 @@ export const HERRAMIENTAS = [
       type: 'object',
       properties: {
         periodo: { type: 'string', description: 'Período fiscal AAAA-MM (ej. "2026-10"). Opcional.' },
-        estado: { type: 'string', enum: ['sin_cargar', 'pendiente', 'enviado', 'presentado', 'no_presentado'] },
+        estado: { type: 'string', enum: ['sin_cargar', 'pendiente', 'enviado_grupo', 'enviado', 'presentado', 'no_presentado'] },
         encargado: { type: 'string', description: 'Nombre del encargado. "yo" para el usuario actual.' },
         digito: { type: 'integer', description: 'Último dígito del RUC (VENC. 0 a 9).' },
         solo_vencidos: { type: 'boolean', description: 'true para sólo los que ya vencieron y no están presentados.' },
@@ -358,8 +358,8 @@ export function crearEjecutor(ctx) {
         return { f, c, l, v, k, estado };
       });
 
-      const totales = { sin_cargar: 0, pendiente: 0, enviado: 0, presentado: 0 };
-      const nombreEstado = { none: 'sin_cargar', pend: 'pendiente', env: 'enviado', pres: 'presentado' };
+      const totales = { sin_cargar: 0, pendiente: 0, enviado_grupo: 0, enviado: 0, presentado: 0 };
+      const nombreEstado = { none: 'sin_cargar', pend: 'pendiente', grupo: 'enviado_grupo', env: 'enviado', pres: 'presentado' };
       let totalAPagar = 0;
       lista.forEach((x) => {
         totales[nombreEstado[x.estado]]++;

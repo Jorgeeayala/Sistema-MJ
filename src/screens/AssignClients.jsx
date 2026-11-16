@@ -19,6 +19,7 @@ import {
   Undo2,
   UserX,
   UserCheck,
+  UserMinus,
 } from 'lucide-react';
 
 // Fila de la lista. Es un div memoizado sin animación: con 300 clientes,
@@ -209,6 +210,11 @@ export default function AssignClients({ onBack }) {
     queueCellUpdate,
     flushPendingSaves,
     applyBulkUpdates,
+    // personas excluidas de la asignación (preferencia del equipo)
+    allTeamUsers,
+    excludedUsers,
+    excludedSupported,
+    toggleExcludedUser,
   } = useClients();
 
   const [undoing, setUndoing] = useState(false);
@@ -354,6 +360,27 @@ export default function AssignClients({ onBack }) {
   const [runningRoundRobin, setRunningRoundRobin] = useState(false);
   const [roundRobinProgress, setRoundRobinProgress] = useState(null); // { done, total }
   const [actionError, setActionError] = useState('');
+
+  // Modo "Excluir": se elige quiénes NO reciben clientes (ni a mano ni en el
+  // reparto). Se guarda en el servidor y vale para todo el equipo.
+  const [excludeMode, setExcludeMode] = useState(false);
+  const [excludeSaving, setExcludeSaving] = useState('');
+  const isExcluded = useCallback(
+    (u) => (excludedUsers || []).some((x) => String(x).trim().toLowerCase() === String(u).trim().toLowerCase()),
+    [excludedUsers]
+  );
+  const handleToggleExcluded = useCallback(async (u) => {
+    if (excludeSaving) return;
+    setExcludeSaving(u);
+    setActionError('');
+    try {
+      await toggleExcludedUser(u);
+    } catch (err) {
+      setActionError(err.message || 'No se pudo guardar la exclusión');
+    } finally {
+      setExcludeSaving('');
+    }
+  }, [excludeSaving, toggleExcludedUser]);
 
   // El reparto automático usa SOLO a los participantes definidos, en el
   // orden que se les dio arrastrando. Si todavía no se definió nadie,
@@ -706,6 +733,12 @@ export default function AssignClients({ onBack }) {
                     <>Tocá cualquier cliente para <span style={{ color: 'var(--danger)' }}>desasignarlo</span></>
                   ) : activeAssignee ? (
                     <>Asignando a: <strong style={{ color: 'var(--primary)' }}>{activeAssignee}</strong> (tocá para asignar; si ya está pintado, tocalo para despintar)</>
+                  ) : excludeMode ? (
+                    <>
+                      Tocá a quien <strong>no lleva clientes</strong> para excluirlo: deja de aparecer para asignar
+                      (acá, en el reparto automático y en el encargado de cada cliente), para todo el equipo.
+                      Tocalo de nuevo para volver a incluirlo.
+                    </>
                   ) : participantsMode ? (
                     <>
                       Tocá los nombres que <strong>participan</strong> del reparto automático.
@@ -722,6 +755,7 @@ export default function AssignClients({ onBack }) {
                   className={`reorder-mode-btn ${participantsMode ? 'active' : ''}`}
                   onClick={() => {
                     setParticipantsMode((curr) => !curr);
+                    setExcludeMode(false);
                     setActiveAssignee(null);
                   }}
                   title="Elegir quiénes entran al reparto automático"
@@ -735,6 +769,27 @@ export default function AssignClients({ onBack }) {
                     </>
                   )}
                 </button>
+                {excludedSupported && (
+                  <button
+                    type="button"
+                    className={`reorder-mode-btn ${excludeMode ? 'active' : ''}`}
+                    onClick={() => {
+                      setExcludeMode((curr) => !curr);
+                      setParticipantsMode(false);
+                      setActiveAssignee(null);
+                    }}
+                    title="Elegir quiénes del equipo no llevan clientes (vale para todos los dispositivos)"
+                  >
+                    {excludeMode ? (
+                      'Listo'
+                    ) : (
+                      <>
+                        <UserMinus size={13} /> Excluir
+                        {excludedUsers.length > 0 && <span className="mode-count">{`(${excludedUsers.length})`}</span>}
+                      </>
+                    )}
+                  </button>
+                )}
                 {activeAssignee && (
                 <button
                   type="button"
@@ -755,7 +810,22 @@ export default function AssignClients({ onBack }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {(participantsMode ? teamUsers : repartoUsers).map((u, idx) => (
+              {excludeMode && allTeamUsers.map((u) => (
+                <button
+                  key={'x-' + u}
+                  type="button"
+                  className={`filter-pill team-pill ${isExcluded(u) ? 'not-participant' : ''}`}
+                  onClick={() => handleToggleExcluded(u)}
+                  disabled={Boolean(excludeSaving)}
+                  aria-pressed={isExcluded(u)}
+                  title={isExcluded(u) ? `${u} está excluido · Tocá para volver a incluirlo` : `Tocá para excluir a ${u} de la asignación`}
+                >
+                  <span className="pill-order-num">{isExcluded(u) ? '✕' : '✓'}</span>
+                  {u}
+                  {excludeSaving === u && <Loader2 size={12} className="animate-spin" />}
+                </button>
+              ))}
+              {!excludeMode && (participantsMode ? teamUsers : repartoUsers).map((u, idx) => (
                 <button
                   key={u}
                   type="button"
@@ -798,14 +868,14 @@ export default function AssignClients({ onBack }) {
                 </button>
               ))}
 
-              <button
+              {!excludeMode && <button
                 className={`filter-pill ${activeAssignee === '__unassign__' ? 'active' : ''}`}
                 onClick={() => setActiveAssignee((curr) => (curr === '__unassign__' ? null : '__unassign__'))}
                 style={activeAssignee === '__unassign__' ? { backgroundColor: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' } : {}}
                 title="Tocar clientes para desasignar directamente"
               >
                 <UserX size={13} /> Desasignar
-              </button>
+              </button>}
             </div>
 
             {/* Confirmación del reparto automático: se expande DENTRO del

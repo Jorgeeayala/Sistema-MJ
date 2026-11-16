@@ -132,6 +132,7 @@ const AMBIENTES_OK = ['ninguna', 'automatica', 'navidad', 'anio-nuevo', 'semana-
 const pinturas = []; // filas pintadas por recepcionPintarFila
 // Asistente (AppsScript-Agente.gs): pedidos recibidos y envíos por Whaticket.
 const agentePedidos = [];
+let equipoExcluidos = [];
 const whaticketEnvios = [];
 // Chats simulados por número. El primer cliente de la planilla mj (595981100000)
 // tiene una conversación reciente; los demás no tienen chat.
@@ -421,6 +422,17 @@ export async function handle(body) {
       const colores = { ...MOCK_COLORES_IVA, ...((iva.config && iva.config.colores) || {}) };
       pinturas.push({ year: body.year, sheet: body.sheet, row: row._row, color: colores[digito] });
       return { ok: true, pintado: true, color: colores[digito], origen: `vencimientos IVA (VENC. ${digito})`, digito };
+    }
+    // Preferencia del equipo (AppsScript-Preferencias.gs): excluidos de la asignación.
+    case 'preferenciasEquipoObtener':
+      return { ok: true, excluidosAsignacion: equipoExcluidos };
+    case 'preferenciasEquipoGuardar': {
+      if (session.role !== 'ADMINISTRADOR' && session.role !== 'SUPERUSUARIO') {
+        return { ok: false, code: 'EQUIPO_SIN_PERMISO', error: 'Sólo un ADMINISTRADOR o SUPERUSUARIO puede excluir personas de la asignación.' };
+      }
+      if (!Array.isArray(body.excluidosAsignacion)) return { ok: false, code: 'EQUIPO_LISTA_INVALIDA', error: 'Lista de excluidos inválida.' };
+      equipoExcluidos = [...new Set(body.excluidosAsignacion.map((n) => String(n).trim()).filter(Boolean))];
+      return { ok: true, excluidosAsignacion: equipoExcluidos };
     }
     case 'preferenciasObtener': {
       const p = preferencias.get(session.user) || { ambientacion: process.env.AMBIENTE || 'ninguna', animacion: true };

@@ -39,7 +39,8 @@ const REFRESH_MS = 60_000;
 const ESTADO_TAG = {
   none: ['none', 'Sin cargar'],
   pend: ['pend', 'Pendiente'],
-  env: ['env', 'Enviado'],
+  grupo: ['grupo', 'Al grupo'],
+  env: ['env', 'Al cliente'],
   pres: ['pres', 'Presentado'],
 };
 
@@ -453,7 +454,7 @@ function Tablero({
 
       <div className="iva-filters">
         <input type="search" placeholder="Buscar por nombre o RUC" value={query} onChange={(e) => onQuery(e.target.value)} aria-label="Buscar cliente" />
-        {chip('todos', 'Todos')}{chip('none', 'Sin cargar')}{chip('pend', 'Pendientes')}{chip('env', 'Enviados')}{chip('pres', 'Presentados')}
+        {chip('todos', 'Todos')}{chip('none', 'Sin cargar')}{chip('pend', 'Pendientes')}{chip('grupo', 'Al grupo')}{chip('env', 'Al cliente')}{chip('pres', 'Presentados')}
         {dayFilter !== null && <button type="button" className="iva-linkbtn" onClick={() => onDayFilter(null)}>Ver todos los días</button>}
         <button type="button" className="iva-btn iva-push" onClick={onExportPdf} disabled={!visibleRows.length}>
           Exportar PDF{dayFilter !== null ? ' del día ' + vencAuto(config, dayFilter, periodo).fecha.getDate() : ''}

@@ -7,6 +7,7 @@ import { blobABase64, useIntegraciones } from '../agente/integraciones';
 import ChatWhaticket from './ChatWhaticket';
 import {
   ESTADOS,
+  estadoTrasEnvio,
   casillasFormulario120,
   casillasTexto,
   IVA_DEFAULT_NUEVO,
@@ -233,8 +234,17 @@ export default function IvaEditor({
     setFocusTarget(null);
   }, [focusTarget, libroMode, draft]);
 
+  // Descargar o copiar la ficha: si estaba Pendiente, pasa a Enviado al
+  // cliente (como siempre).
   const markSent = () => {
-    if (draftRef.current?.estado === 'pend') setField('estado', 'env');
+    if ((draftRef.current?.estado || 'pend') === 'pend') setField('estado', 'env');
+  };
+  // Envío explícito por WhatsApp: al cliente → Enviado al cliente; al grupo
+  // contable → Enviado al grupo contable. Nunca hace retroceder el estado.
+  const marcarEnviado = (destino) => {
+    const actual = draftRef.current?.estado || 'pend';
+    const nuevo = estadoTrasEnvio(actual, destino === 'grupo' ? 'grupo' : 'env');
+    if (nuevo !== actual) setField('estado', nuevo);
   };
 
   // WhatsApp no deja adjuntar archivos por enlace. En el teléfono la imagen
@@ -251,7 +261,7 @@ export default function IvaEditor({
         const file = new File([await blobPromise], nombre, { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], text: waMensaje(fctx, draft) });
-          markSent();
+          marcarEnviado('cliente');
           return;
         }
       } catch (error) {
@@ -300,7 +310,7 @@ export default function IvaEditor({
       }
       if (resp.ok) {
         toast('WhatsApp Web: se abre el chat con el texto y la imagen. Revisá y tocá Enviar.');
-        markSent();
+        marcarEnviado('cliente');
         return;
       }
       if (resp.error !== 'NO_EXTENSION') {
@@ -315,7 +325,7 @@ export default function IvaEditor({
       toast(copiada
         ? 'No se detectó la extensión Ekuatia: se abrió WhatsApp Web aparte. Pegá la imagen con Ctrl+V.'
         : 'No se detectó la extensión Ekuatia: se descargó la imagen para adjuntarla a mano.');
-      markSent();
+      marcarEnviado('cliente');
       return;
     }
 
@@ -325,7 +335,7 @@ export default function IvaEditor({
     toast(copiada
       ? 'Imagen copiada. En el chat de WhatsApp pegala con Ctrl+V y enviá.'
       : 'Se descargó la imagen: adjuntala en el chat de WhatsApp.');
-    markSent();
+    marcarEnviado('cliente');
   };
 
   const saveCliente = async (patch) => {
@@ -747,7 +757,7 @@ export default function IvaEditor({
             texto: waMensaje(fichaCtx, draft),
             nombreArchivo: fileBase(fichaCtx) + '.png',
           } : null}
-          onFichaEnviada={() => { markSent(); toast('Ficha enviada al cliente'); }}
+          onFichaEnviada={() => { marcarEnviado('cliente'); toast('Ficha enviada al cliente'); }}
           onClose={() => setWhaticketOpen(null)}
         />
       )}
@@ -758,7 +768,7 @@ export default function IvaEditor({
           crearImagen={() => fichaBlob(fichaRef.current)}
           nombreArchivo={fileBase(fichaCtx) + '.png'}
           onClose={() => setWhaticketOpen(null)}
-          onSent={() => { markSent(); toast('Ficha enviada al grupo contable'); }}
+          onSent={() => { marcarEnviado('grupo'); toast('Ficha enviada al grupo contable'); }}
         />
       )}
     </div>
