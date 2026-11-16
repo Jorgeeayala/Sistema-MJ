@@ -33,6 +33,7 @@ const partes = [
   ['AppsScript-Libros.gs', leer('AppsScript-Libros.gs')],
   ['AppsScript-Agente.gs', leer('AppsScript-Agente.gs')],
   ['AppsScript-Whaticket.gs', leer('AppsScript-Whaticket.gs')],
+  ['AppsScript-AvisoDiario.gs', leer('AppsScript-AvisoDiario.gs')],
   ['pruebas/instalador.gs', leer('pruebas/instalador.gs')],
 ];
 
