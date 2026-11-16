@@ -5,6 +5,11 @@
  * dispositivo. Por ahora: la ambientación por época del año (Navidad,
  * estaciones, etc.) y si se muestra la animación al ingresar.
  *
+ * También guarda una preferencia del EQUIPO (igual para todos): quiénes
+ * están excluidos de la asignación de clientes (no aparecen para asignar ni
+ * entran al reparto automático). La leen todos; sólo ADMINISTRADOR y
+ * SUPERUSUARIO la cambian. Vive en Script Properties.
+ *
  * Instalación en el proyecto de Apps Script:
  *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Preferencias" y
  *      pegar este contenido completo.
@@ -98,10 +103,52 @@ function handlePreferenciasGuardar(body, sessionUser) {
   }
 }
 
+// ── PREFERENCIAS DEL EQUIPO ─────────────────────────────────────────────
+const EQUIPO_EXCLUIDOS_PROPERTY = 'EQUIPO_EXCLUIDOS_ASIGNACION';
+const EQUIPO_MAX_EXCLUIDOS = 50;
+
+function equipoLeerExcluidos_() {
+  try {
+    const lista = JSON.parse(PropertiesService.getScriptProperties().getProperty(EQUIPO_EXCLUIDOS_PROPERTY) || '[]');
+    return Array.isArray(lista) ? lista.filter(function (n) { return typeof n === 'string' && n.trim(); }) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function handlePreferenciasEquipoObtener() {
+  return jsonResponse({ ok: true, excluidosAsignacion: equipoLeerExcluidos_() });
+}
+
+// body.excluidosAsignacion: lista completa de nombres excluidos.
+function handlePreferenciasEquipoGuardar(body, sessionUser, sessionRole) {
+  const rol = String(sessionRole || '').toUpperCase();
+  if (rol !== 'ADMINISTRADOR' && rol !== 'SUPERUSUARIO') {
+    return errorResponse('Sólo un ADMINISTRADOR o SUPERUSUARIO puede excluir personas de la asignación.', 'EQUIPO_SIN_PERMISO');
+  }
+  if (!Array.isArray(body.excluidosAsignacion) || body.excluidosAsignacion.length > EQUIPO_MAX_EXCLUIDOS) {
+    return errorResponse('Lista de excluidos inválida.', 'EQUIPO_LISTA_INVALIDA');
+  }
+  const vistos = {};
+  const lista = [];
+  body.excluidosAsignacion.forEach(function (n) {
+    const nombre = String(n || '').trim().slice(0, 80);
+    const clave = canonicalUserName(nombre);
+    if (nombre && !vistos[clave]) {
+      vistos[clave] = true;
+      lista.push(nombre);
+    }
+  });
+  PropertiesService.getScriptProperties().setProperty(EQUIPO_EXCLUIDOS_PROPERTY, JSON.stringify(lista));
+  return jsonResponse({ ok: true, excluidosAsignacion: lista });
+}
+
 function handlePreferenciasAction(action, body, sessionUser, sessionRole) {
   const routes = {
     preferenciasObtener: [function () { return handlePreferenciasObtener(sessionUser); }, 'PREFERENCIAS_OBTENER_ERROR'],
-    preferenciasGuardar: [function () { return handlePreferenciasGuardar(body, sessionUser); }, 'PREFERENCIAS_GUARDAR_ERROR']
+    preferenciasGuardar: [function () { return handlePreferenciasGuardar(body, sessionUser); }, 'PREFERENCIAS_GUARDAR_ERROR'],
+    preferenciasEquipoObtener: [function () { return handlePreferenciasEquipoObtener(); }, 'EQUIPO_OBTENER_ERROR'],
+    preferenciasEquipoGuardar: [function () { return handlePreferenciasEquipoGuardar(body, sessionUser, sessionRole); }, 'EQUIPO_GUARDAR_ERROR']
   };
   const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
   if (!route) return null;

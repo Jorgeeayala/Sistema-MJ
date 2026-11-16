@@ -602,6 +602,12 @@ export const api = {
       return { ambientacion: data.ambientacion || 'ninguna', animacion: data.animacion !== false };
     },
     guardar: (cambios) => request({ action: 'preferenciasGuardar', ...cambios }),
+    // Del equipo (iguales para todos): personas excluidas de la asignación.
+    equipo: async () => {
+      const data = await request({ action: 'preferenciasEquipoObtener' });
+      return { excluidosAsignacion: Array.isArray(data.excluidosAsignacion) ? data.excluidosAsignacion : [] };
+    },
+    guardarEquipo: (excluidosAsignacion) => request({ action: 'preferenciasEquipoGuardar', excluidosAsignacion }),
   },
 
   // Libros IVA de compras y ventas importados de SIGA (AppsScript-Libros.gs).

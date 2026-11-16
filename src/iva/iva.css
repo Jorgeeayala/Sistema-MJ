@@ -206,6 +206,8 @@
 }
 .iva-tag.pend { background: var(--rx-amber-soft); color: var(--iva-warn); }
 .iva-tag.env { background: var(--rx-brand-soft); color: var(--rx-brand); }
+.iva-tag.grupo { background: rgba(124, 58, 237, 0.14); color: #7c3aed; }
+[data-theme='dark'] .iva-tag.grupo { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
 .iva-tag.pres { background: var(--rx-green-soft); color: var(--iva-favor); }
 .iva-tag.none { background: var(--rx-soft); color: var(--rx-muted); }
 .iva-tag.exc { background: var(--rx-red-soft); color: var(--iva-pay); margin-left: 6px; vertical-align: 1px; }

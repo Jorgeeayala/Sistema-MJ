@@ -22,7 +22,15 @@ export const IVA_DEFAULT = true;
 // IVA" lo extrae (pedido de la oficina). Cada monto nuevo arranca en "IVA
 // incluido", o sea iva: false.
 export const IVA_DEFAULT_NUEVO = false;
-export const ESTADOS = { pend: 'Pendiente', env: 'Enviado al cliente', pres: 'Presentado' };
+// En el orden en que avanza una liquidación (también es el orden del selector).
+export const ESTADOS = { pend: 'Pendiente', grupo: 'Enviado al grupo contable', env: 'Enviado al cliente', pres: 'Presentado' };
+const ORDEN_ESTADOS = ['pend', 'grupo', 'env', 'pres'];
+
+// Estado después de mandar la ficha: nunca retrocede (si ya estaba enviada al
+// cliente o presentada, mandarla al grupo no la cambia).
+export function estadoTrasEnvio(actual, nuevo) {
+  return ORDEN_ESTADOS.indexOf(nuevo) > ORDEN_ESTADOS.indexOf(actual || 'pend') ? nuevo : (actual || 'pend');
+}
 
 // Categorías con montos múltiples. r = tasa de IVA (0 = exento). Según Formulario 120 v4 (DNIT).
 export const LISTS = [
