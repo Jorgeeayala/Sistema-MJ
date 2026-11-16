@@ -10,9 +10,10 @@ const { chromium } = require('playwright');
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const EXT = join(AQUI, '..', '..', 'Extension');
-const CERT_DIR = process.env.CERT_DIR || '/tmp/ekuatia-sim';
+const CERT_DIR = process.env.CERT_DIR || join(tmpdir(), 'ekuatia-sim');
 execSync(`mkdir -p ${CERT_DIR} && [ -f ${CERT_DIR}/cert.pem ] || openssl req -x509 -newkey rsa:2048 -nodes -keyout ${CERT_DIR}/key.pem -out ${CERT_DIR}/cert.pem -days 30 -subj "/CN=marangatu.set.gov.py" -addext "subjectAltName=DNS:marangatu.set.gov.py" 2>/dev/null`);
 const ID = 'dffknnjnidhfldehfalchalikfkjbehm';
 const ok = (c, m) => { console.log(c ? 'ok  ' : 'FALLO', m); if (!c) process.exitCode = 1; };
@@ -96,7 +97,7 @@ const appSrv = http.createServer((req, res) => { res.writeHead(200, { 'content-t
 await new Promise((r) => appSrv.listen(3999, '127.0.0.1', r));
 const ctx = await chromium.launchPersistentContext(CERT_DIR + '/perfil-' + Date.now(), {
   headless: true,
-  ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+  ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chromium' }),
   ignoreHTTPSErrors: true,
   ignoreDefaultArgs: ['--disable-popup-blocking'],
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--no-proxy-server', '--ignore-certificate-errors',

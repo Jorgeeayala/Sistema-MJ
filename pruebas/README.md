@@ -41,7 +41,7 @@ original.
 | CAMBIO-4 | Ambientación por época (fechas especiales y estaciones), guardada por usuario | En prueba | No |
 | CAMBIO-5 | Traído de `Jorgeeayala/Sistema-MJ`: actualizar usuarios en «¿Quién sos?» y columnas parejas en la lista de clientes | En prueba | No |
 | CAMBIO-6 | Cada hoja vence el mes siguiente (hoja OCTUBRE → noviembre): ficha, días de retraso y Vencimientos IVA | En prueba | No |
-| CAMBIO-7 | Extensión 2.12: flujo del Formulario 120 (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
+| CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
 
