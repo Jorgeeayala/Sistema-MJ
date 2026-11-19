@@ -77,7 +77,7 @@ function readLibroPreference() {
 }
 
 function emptyRow(iva = IVA_DEFAULT_NUEVO, f = '') {
-  return { m: 0, iva, f, n: '', t: '' };
+  return { m: 0, iva, f, n: '', tb: '', t: '' };
 }
 
 // Monto en guaraníes con separador de miles mientras se escribe. El cursor
@@ -155,7 +155,7 @@ export default function IvaEditor({
         const full = (await api.iva.getDoc(periodo, cliente.ruc)) || summaryDoc;
         if (cancelled) return;
         const d = normDraft({ ...full });
-        if (LISTS.some((L) => getItems(d, L.k).some((x) => x.f || x.n || x.t))) setLibroMode(true);
+        if (LISTS.some((L) => getItems(d, L.k).some((x) => x.f || x.n || x.tb || x.t))) setLibroMode(true);
         setDraft(d);
       } catch (error) {
         if (!cancelled) setLoadError(error.message || 'No se pudo abrir el cliente. Revisá la conexión y reintentá.');
@@ -412,6 +412,7 @@ export default function IvaEditor({
               <>
                 <input type="date" className="dt" data-d={`${key}:${i}:f`} value={x.f || ''} onChange={(e) => setItem(key, i, { f: e.target.value })} aria-label={`Fecha del comprobante ${i + 1}`} />
                 <input className="nm" placeholder="N° comprobante" maxLength={40} value={x.n || ''} onChange={(e) => setItem(key, i, { n: e.target.value })} aria-label={`Número de comprobante ${i + 1}`} />
+                <input className="tb" placeholder="Timbrado" inputMode="numeric" value={x.tb || ''} onChange={(e) => setItem(key, i, { tb: e.target.value.replace(/\D/g, '').slice(0, 8) })} aria-label={`Timbrado del comprobante ${i + 1}`} title="Timbrado (8 dígitos)" />
                 <input className="tc" placeholder={tl} maxLength={80} value={x.t || ''} onChange={(e) => setItem(key, i, { t: e.target.value })} aria-label={`${tl} ${i + 1}`} />
               </>
             )}
@@ -521,7 +522,7 @@ export default function IvaEditor({
                 try { localStorage.setItem(LIBRO_STORAGE_KEY, e.target.checked ? '1' : '0'); } catch { /* preferencia opcional */ }
               }}
             />
-            <span>Cargar detalle de comprobantes (fecha, número y cliente/proveedor) para el libro de ventas y compras</span>
+            <span>Cargar detalle de comprobantes (fecha, número, timbrado y cliente/proveedor) para el libro de ventas y compras</span>
           </label>
 
           <div className="iva-rubro first">Saldos anteriores (información inicial del período)</div>

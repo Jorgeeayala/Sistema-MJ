@@ -44,6 +44,7 @@ original.
 | CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
+| CAMBIO-13 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -367,3 +368,11 @@ node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 - **WhatsApp Web es real**: probar el envío con el número propio.
 - Las planillas de pruebas quedan en tu Drive: si cargás datos reales en
   ellas, compartirlas sólo con quien hace las pruebas.
+
+### CAMBIO-13 · Timbrado en la carga de comprobantes
+
+- En la ficha del IVA, con «Cargar detalle de comprobantes» activado, cada comprobante tiene ahora el campo **Timbrado**, junto al número.
+- El campo acepta solo números (hasta 8). Si se pega con guiones o espacios (`1764-5321`), se limpian solos.
+- El timbrado se guarda con el resto del detalle (campo `tb` en el JSON de la liquidación). No hace falta tocar el Apps Script.
+- El PDF «Libro de compras y ventas» suma la columna **Timbrado**, entre Comprobante y Cliente/Proveedor.
+- Archivos: `src/iva/IvaEditor.jsx`, `src/iva/ivaCore.js`, `src/iva/iva.css`.
