@@ -1,36 +1,97 @@
-import { BarChart3, BookOpen, Clock, FileCode2, FileText, Receipt, UserCog, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BarChart3, BookOpen, Clock, FileCode2, FileText, Menu, Receipt, UserCog, Users, X } from 'lucide-react';
 
+// Pestañas fijas de la barra inferior (las de uso diario).
 const TABS = [
   { id: 'stats', label: 'Métricas', Icon: BarChart3 },
   { id: 'clients', label: 'Clientes', Icon: Users },
   { id: 'iva', label: 'IVA', Icon: Receipt },
   { id: 'comprobantes', label: 'Comprob.', Icon: FileText },
-  { id: 'libros', label: 'Libros', Icon: BookOpen },
-  { id: 'xml', label: 'XML', Icon: FileCode2 },
-  { id: 'assign', label: 'Asignar', Icon: UserCog, requiresAssign: true },
-  { id: 'marcaciones', label: 'Horas', Icon: Clock, requiresAssign: true },
+];
+
+// El resto va en el menú «Más», con el nombre completo.
+const MAS = [
+  { id: 'libros', label: 'Libros IVA', description: 'Compras y ventas', Icon: BookOpen },
+  { id: 'xml', label: 'XML / KuDE', description: 'Comprobantes e impresión', Icon: FileCode2 },
+  { id: 'assign', label: 'Asignar clientes', description: 'Equipo y reparto', Icon: UserCog, requiresAssign: true },
+  { id: 'marcaciones', label: 'Marcaciones', description: 'Horas a favor y en contra', Icon: Clock, requiresAssign: true },
 ];
 
 export default function MobileTabBar({ activeTab, canAssignClients, onChange }) {
-  const tabs = TABS.filter((tab) => !tab.requiresAssign || canAssignClients);
+  const [abierto, setAbierto] = useState(false);
+  const mas = MAS.filter((item) => !item.requiresAssign || canAssignClients);
+  const enMas = mas.some((item) => item.id === activeTab);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const alTeclear = (e) => {
+      if (e.key === 'Escape') setAbierto(false);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [abierto]);
+
+  const elegir = (id) => {
+    setAbierto(false);
+    onChange(id);
+  };
 
   return (
-    <nav className="real-exec-mobile-tabs" aria-label="Secciones del período">
-      {tabs.map(({ id, label, Icon }) => {
-        const active = activeTab === id;
-        return (
-          <button
-            key={id}
-            type="button"
-            className={active ? 'is-active' : ''}
-            aria-current={active ? 'page' : undefined}
-            onClick={() => onChange(id)}
-          >
-            <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
-            <span>{label}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <>
+      {abierto && (
+        <div className="real-exec-mobile-mas-fondo" onClick={() => setAbierto(false)} aria-hidden="true" />
+      )}
+      {abierto && (
+        <div className="real-exec-mobile-mas" id="menu-mas" role="menu" aria-label="Más secciones">
+          {mas.map(({ id, label, description, Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                className={active ? 'is-active' : ''}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => elegir(id)}
+              >
+                <Icon size={20} strokeWidth={active ? 2.4 : 1.9} />
+                <span>
+                  <strong>{label}</strong>
+                  <small>{description}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <nav className="real-exec-mobile-tabs" aria-label="Secciones del período">
+        {TABS.map(({ id, label, Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={active ? 'is-active' : ''}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => elegir(id)}
+            >
+              <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className={enMas || abierto ? 'is-active' : ''}
+          aria-expanded={abierto}
+          aria-controls="menu-mas"
+          aria-haspopup="menu"
+          onClick={() => setAbierto((v) => !v)}
+        >
+          {abierto ? <X size={21} strokeWidth={2.4} /> : <Menu size={21} strokeWidth={enMas ? 2.4 : 1.9} />}
+          <span>Más</span>
+        </button>
+      </nav>
+    </>
   );
 }
