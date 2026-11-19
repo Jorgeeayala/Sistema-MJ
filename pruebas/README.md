@@ -44,8 +44,10 @@ original.
 | CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
-| CAMBIO-13 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
-| CAMBIO-14 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
+| CAMBIO-13 | Mantenimiento (PR #4): cambio del token sin cortes (acepta API_TOKEN y API_TOKEN_ANTERIOR), APK 1.1, PENDIENTES al día | En prueba | No |
+| CAMBIO-14 | Aviso diario de vencimientos al grupo contable por Whaticket (PR #5, `AppsScript-AvisoDiario.gs`) | En prueba | No |
+| CAMBIO-15 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
+| CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -370,7 +372,7 @@ node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 - Las planillas de pruebas quedan en tu Drive: si cargás datos reales en
   ellas, compartirlas sólo con quien hace las pruebas.
 
-### CAMBIO-13 · Timbrado en la carga de comprobantes
+### CAMBIO-15 · Timbrado en la carga de comprobantes
 
 - En la ficha del IVA, con «Cargar detalle de comprobantes» activado, cada comprobante tiene ahora el campo **Timbrado**, junto al número.
 - El campo acepta solo números (hasta 8). Si se pega con guiones o espacios (`1764-5321`), se limpian solos.
@@ -378,7 +380,7 @@ node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 - El PDF «Libro de compras y ventas» suma la columna **Timbrado**, entre Comprobante y Cliente/Proveedor.
 - Archivos: `src/iva/IvaEditor.jsx`, `src/iva/ivaCore.js`, `src/iva/iva.css`.
 
-### CAMBIO-14 · Registro de comprobantes (etapa 1)
+### CAMBIO-16 · Registro de comprobantes (etapa 1)
 
 Es la primera etapa del plan para cargar distintos tipos de documento. Cada comprobante se carga **una sola vez** por cliente, y cada impuesto lee de ahí lo que le corresponde.
 
