@@ -382,6 +382,10 @@ function handleAvisosAction(action, body, sessionUser, sessionRole) {
   if (String(action).indexOf('libros') === 0 && typeof handleLibrosAction === 'function') {
     return handleLibrosAction(action, body, sessionUser, sessionRole);
   }
+  // Registro de comprobantes por cliente (AppsScript-Comprobantes.gs).
+  if (String(action).indexOf('comprobantes') === 0 && typeof handleComprobantesAction === 'function') {
+    return handleComprobantesAction(action, body, sessionUser, sessionRole);
+  }
   // Asistente con IA y envío de fichas por Whaticket (AppsScript-Agente.gs).
   if ((String(action).indexOf('agente') === 0 || String(action).indexOf('whaticket') === 0) &&
       typeof handleAgenteAction === 'function') {

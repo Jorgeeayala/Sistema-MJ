@@ -21,6 +21,11 @@ export function getIvaConfig() {
   return promise;
 }
 
+// Después de guardar la configuración, para que el resto la vuelva a pedir.
+export function invalidarIvaConfig() {
+  cache = null;
+}
+
 onPrivateDataCleared(() => {
   cache = null;
 });

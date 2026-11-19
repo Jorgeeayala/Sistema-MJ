@@ -40,7 +40,6 @@ const AD_HORA_DEFAULT = 7;
 const AD_DIAS_DEFAULT = '1-6';
 const AD_ULTIMO_PROPERTY = 'AVISO_DIARIO_ULTIMO';
 const AD_MAX_CARACTERES = 3800; // WhatsApp admite ~4000 por mensaje
-const AD_MAX_NOMBRES_POR_ENCARGADO = 8;
 const AD_MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const AD_DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
@@ -222,10 +221,6 @@ function adGs(n) {
   return Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-function adEtiquetaEstado(estado) {
-  return { pend: 'pendiente', grupo: 'enviado al grupo', env: 'enviado al cliente', pres: 'presentado' }[estado] || 'pendiente';
-}
-
 // Datos del aviso para la fecha "hoy" (Date). Exportado para las pruebas.
 function adCalcularAviso(hoy) {
   const diasEnvio = adDiasDeEnvio();
@@ -291,23 +286,15 @@ function adAgruparPorEncargado(items) {
     .map(function (e) { return { encargado: e, items: grupos[e] }; });
 }
 
-function adNombreCorto(it, conMonto) {
-  let txt = it.nombre;
-  if (conMonto && it.resultado === 'A pagar' && it.monto > 0) txt += ' (Gs. ' + adGs(it.monto) + ')';
-  else if (it.estado === 'none') txt += ' (sin cargar)';
-  else if (it.estado === 'grupo' || it.estado === 'env') txt += ' (' + adEtiquetaEstado(it.estado) + ')';
-  return txt;
-}
+// Formato corto: por cada día, totales y pendientes por encargado (sólo la
+// cantidad); se nombran únicamente los clientes que ya tienen monto a pagar
+// (como mucho AD_MAX_A_PAGAR). Los vencidos van como cantidad por encargado.
+const AD_MAX_A_PAGAR = 5;
 
-function adListaPorEncargado(items, conMonto) {
-  return adAgruparPorEncargado(items).map(function (g) {
-    const nombres = g.items
-      .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); })
-      .slice(0, AD_MAX_NOMBRES_POR_ENCARGADO)
-      .map(function (it) { return adNombreCorto(it, conMonto); });
-    const resto = g.items.length - nombres.length;
-    return '• *' + g.encargado + '* (' + g.items.length + '): ' + nombres.join(', ') + (resto > 0 ? ' y ' + resto + ' más' : '');
-  });
+function adConteoPorEncargado(items) {
+  return adAgruparPorEncargado(items)
+    .map(function (g) { return g.encargado + ' ' + g.items.length; })
+    .join(' · ');
 }
 
 function adArmarMensaje(datos) {
@@ -325,31 +312,43 @@ function adArmarMensaje(datos) {
     const titulo = idx === 0 ? 'Hoy' : idx === 1 ? 'Mañana' : AD_DIAS_SEMANA[d.getDay()].charAt(0).toUpperCase() + AD_DIAS_SEMANA[d.getDay()].slice(1);
     const venc = Object.keys(digitos).length ? ' · VENC. ' + Object.keys(digitos).join(', ') : '';
     const pendientes = items.filter(function (it) { return it.estado !== 'pres'; });
-    const aPagar = pendientes.reduce(function (s, it) { return s + (it.resultado === 'A pagar' ? it.monto : 0); }, 0);
+    const presentados = items.length - pendientes.length;
     lineas.push('');
-    lineas.push('*' + titulo + ' ' + adFechaCorta(d) + venc + '*: ' + items.length + ' cliente' + (items.length === 1 ? '' : 's') +
-      ' · ' + (items.length - pendientes.length) + ' presentado' + (items.length - pendientes.length === 1 ? '' : 's') +
-      ' · *' + pendientes.length + ' sin presentar*' + (aPagar > 0 ? ' (a pagar Gs. ' + adGs(aPagar) + ')' : ''));
-    if (pendientes.length) adListaPorEncargado(pendientes, true).forEach(function (l) { lineas.push(l); });
-    else lineas.push('Todo presentado ✅');
+    lineas.push('*' + titulo + ' ' + adFechaCorta(d) + venc + '*');
+    if (!pendientes.length) {
+      lineas.push(items.length + ' cliente' + (items.length === 1 ? '' : 's') + ' · todo presentado ✅');
+      return;
+    }
+    const sinCargar = pendientes.filter(function (it) { return it.estado === 'none'; }).length;
+    lineas.push(pendientes.length + ' sin presentar de ' + items.length +
+      (presentados ? ' (' + presentados + ' presentado' + (presentados === 1 ? '' : 's') + ')' : '') +
+      (sinCargar ? ' · ' + sinCargar + ' sin liquidación' : ''));
+    lineas.push(adConteoPorEncargado(pendientes));
+    const aPagar = pendientes
+      .filter(function (it) { return it.resultado === 'A pagar' && it.monto > 0; })
+      .sort(function (a, b) { return b.monto - a.monto; });
+    if (aPagar.length) {
+      const total = aPagar.reduce(function (s, it) { return s + it.monto; }, 0);
+      const nombres = aPagar.slice(0, AD_MAX_A_PAGAR).map(function (it) { return it.nombre + ' ' + adGs(it.monto); });
+      lineas.push('A pagar Gs. ' + adGs(total) + ': ' + nombres.join(', ') +
+        (aPagar.length > AD_MAX_A_PAGAR ? ' y ' + (aPagar.length - AD_MAX_A_PAGAR) + ' más' : ''));
+    }
   });
 
   if (datos.vencidos.length) {
     hayAlgo = true;
     lineas.push('');
     lineas.push('*Vencidos sin presentar: ' + datos.vencidos.length + '*');
-    adListaPorEncargado(datos.vencidos, false).forEach(function (l) { lineas.push(l); });
+    lineas.push(adConteoPorEncargado(datos.vencidos));
   }
 
   if (!hayAlgo) return null;
 
   datos.avisosDatos.forEach(function (a) { lineas.push('', '⚠️ ' + a); });
-  lineas.push('', '_Aviso automático de Sistema MJ_');
+  lineas.push('', '_Detalle en Sistema MJ → Vencimientos IVA_');
 
   let texto = lineas.join('\n');
-  if (texto.length > AD_MAX_CARACTERES) {
-    texto = texto.slice(0, AD_MAX_CARACTERES - 80).replace(/\n[^\n]*$/, '') + '\n…\n_Lista recortada: el detalle completo está en Sistema MJ → Vencimientos IVA._';
-  }
+  if (texto.length > AD_MAX_CARACTERES) texto = texto.slice(0, AD_MAX_CARACTERES - 2).replace(/\n[^\n]*$/, '') + '\n…';
   return texto;
 }
 

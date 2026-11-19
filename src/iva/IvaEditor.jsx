@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { api } from '../api';
 import { enviarContextoApp, enviarWhatsappExtension, mensajeDeError, sendIvaToMarangatu } from '../marangatu';
 import DescargaFormularios from './DescargaFormularios';
+import MoneyInput from './MoneyInput';
+import TraerDelRegistro from '../comprobantes/TraerDelRegistro';
 import { blobABase64, useIntegraciones } from '../agente/integraciones';
 import ChatWhaticket from './ChatWhaticket';
 import {
@@ -31,7 +33,6 @@ import {
   shiftPer,
   resumenHoja,
   textOn,
-  toNum,
   vencDe,
   diasRetraso,
   waChatUrl,
@@ -77,36 +78,7 @@ function readLibroPreference() {
 }
 
 function emptyRow(iva = IVA_DEFAULT_NUEVO, f = '') {
-  return { m: 0, iva, f, n: '', t: '' };
-}
-
-// Monto en guaraníes con separador de miles mientras se escribe. El cursor
-// se conserva contando desde el final, como en la versión anterior.
-function MoneyInput({ value, onValue, className = '', ...rest }) {
-  const ref = useRef(null);
-  const fromEnd = useRef(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (fromEnd.current === null || !el || el !== document.activeElement) return;
-    const pos = Math.max(0, el.value.length - fromEnd.current);
-    el.setSelectionRange(pos, pos);
-    fromEnd.current = null;
-  });
-  return (
-    <input
-      ref={ref}
-      className={className}
-      inputMode="numeric"
-      placeholder="0"
-      value={value ? gs(value) : ''}
-      onChange={(e) => {
-        fromEnd.current = e.target.value.length - (e.target.selectionStart ?? e.target.value.length);
-        onValue(toNum(e.target.value));
-      }}
-      onFocus={(e) => e.target.select()}
-      {...rest}
-    />
-  );
+  return { m: 0, iva, f, n: '', tb: '', t: '' };
 }
 
 export default function IvaEditor({
@@ -155,7 +127,7 @@ export default function IvaEditor({
         const full = (await api.iva.getDoc(periodo, cliente.ruc)) || summaryDoc;
         if (cancelled) return;
         const d = normDraft({ ...full });
-        if (LISTS.some((L) => getItems(d, L.k).some((x) => x.f || x.n || x.t))) setLibroMode(true);
+        if (LISTS.some((L) => getItems(d, L.k).some((x) => x.f || x.n || x.tb || x.t))) setLibroMode(true);
         setDraft(d);
       } catch (error) {
         if (!cancelled) setLoadError(error.message || 'No se pudo abrir el cliente. Revisá la conexión y reintentá.');
@@ -412,6 +384,7 @@ export default function IvaEditor({
               <>
                 <input type="date" className="dt" data-d={`${key}:${i}:f`} value={x.f || ''} onChange={(e) => setItem(key, i, { f: e.target.value })} aria-label={`Fecha del comprobante ${i + 1}`} />
                 <input className="nm" placeholder="N° comprobante" maxLength={40} value={x.n || ''} onChange={(e) => setItem(key, i, { n: e.target.value })} aria-label={`Número de comprobante ${i + 1}`} />
+                <input className="tb" placeholder="Timbrado" inputMode="numeric" value={x.tb || ''} onChange={(e) => setItem(key, i, { tb: e.target.value.replace(/\D/g, '').slice(0, 8) })} aria-label={`Timbrado del comprobante ${i + 1}`} title="Timbrado (8 dígitos)" />
                 <input className="tc" placeholder={tl} maxLength={80} value={x.t || ''} onChange={(e) => setItem(key, i, { t: e.target.value })} aria-label={`${tl} ${i + 1}`} />
               </>
             )}
@@ -521,8 +494,23 @@ export default function IvaEditor({
                 try { localStorage.setItem(LIBRO_STORAGE_KEY, e.target.checked ? '1' : '0'); } catch { /* preferencia opcional */ }
               }}
             />
-            <span>Cargar detalle de comprobantes (fecha, número y cliente/proveedor) para el libro de ventas y compras</span>
+            <span>Cargar detalle de comprobantes (fecha, número, timbrado y cliente/proveedor) para el libro de ventas y compras</span>
           </label>
+
+          <TraerDelRegistro
+            ruc={cliente.ruc}
+            periodo={periodo}
+            hayMontos={LISTS.some((L) => getItems(draft, L.k).some((x) => x.m))}
+            onAplicar={(listas, n) => {
+              update((d) => {
+                const nd = { ...d };
+                LISTS.forEach((L) => { nd[L.k] = listas[L.k] || []; });
+                return normDraft(nd);
+              });
+              setLibroMode(true);
+              toast(`Se cargaron ${n} comprobantes del registro al formulario.`);
+            }}
+          />
 
           <div className="iva-rubro first">Saldos anteriores (información inicial del período)</div>
           <div className="iva-fields">

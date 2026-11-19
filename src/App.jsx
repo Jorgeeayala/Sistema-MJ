@@ -14,6 +14,7 @@ const NewClient = lazy(() => import('./screens/NewClient'));
 const AssignClients = lazy(() => import('./screens/AssignClients'));
 const IvaModule = lazy(() => import('./iva/IvaModule'));
 const LibrosModule = lazy(() => import('./libros/LibrosModule'));
+const ComprobantesModule = lazy(() => import('./comprobantes/ComprobantesModule'));
 const MarcacionesModule = lazy(() => import('./marcaciones/MarcacionesModule'));
 const XmlToolModule = lazy(() => import('./xml/XmlToolModule'));
 // La planilla de marcaciones cargada se descarta al cerrar sesión o cambiar de usuario.
@@ -958,7 +959,7 @@ export default function App({
                 <span>Sincronizando…</span>
               </span>
             )}
-            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && mobileTab !== 'libros' && mobileTab !== 'xml' && (
+            {year && month && !selectedClient && mobileTab !== 'iva' && mobileTab !== 'marcaciones' && mobileTab !== 'libros' && mobileTab !== 'comprobantes' && mobileTab !== 'xml' && (
               <button
                 type="button"
                 className="real-exec-refresh-button"
@@ -1567,6 +1568,14 @@ function PeriodScreens({
       return (
         <motion.div key={`marcaciones-${year}-${month}`} variants={pageVariants} initial="initial" animate="animate" exit="exit">
           <MarcacionesModule withDesktopSidebar={!isMobilePeriodNav} />
+        </motion.div>
+      );
+    }
+
+    if (usePeriodTabs && mobileTab === 'comprobantes') {
+      return (
+        <motion.div key={`comprobantes-${year}-${month}`} variants={pageVariants} initial="initial" animate="animate" exit="exit">
+          <ComprobantesModule withDesktopSidebar={!isMobilePeriodNav} />
         </motion.div>
       );
     }

@@ -1,10 +1,11 @@
-import { BarChart3, BookOpen, Clock, FileCode2, Receipt, UserCog, Users } from 'lucide-react';
+import { BarChart3, BookOpen, Clock, FileCode2, FileText, Receipt, UserCog, Users } from 'lucide-react';
 import SitioWebLink from '../estudio/SitioWebLink';
 
 const ITEMS = [
   { id: 'stats', label: 'Estadísticas', description: 'Avance y métricas', Icon: BarChart3 },
   { id: 'clients', label: 'Clientes', description: 'Cartera del período', Icon: Users },
   { id: 'iva', label: 'Vencimientos IVA', description: 'Liquidación y ficha', Icon: Receipt },
+  { id: 'comprobantes', label: 'Comprobantes', description: 'Facturas, NC y timbrados', Icon: FileText },
   { id: 'libros', label: 'Libros IVA', description: 'Compras y ventas', Icon: BookOpen },
   { id: 'xml', label: 'XML / KuDE', description: 'Comprobantes e impresión', Icon: FileCode2 },
   { id: 'assign', label: 'Asignar clientes', description: 'Equipo y reparto', Icon: UserCog, requiresAssign: true },

@@ -44,7 +44,13 @@ original.
 | CAMBIO-7 | Extensión 2.13: flujo del Formulario 120 + ícono MJ y ventana rediseñada (sesión por cliente, cierre de sesión confiable, ventanas como las abre Marangatu, completar al aparecer el formulario) | En prueba | No |
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
-| CAMBIO-15 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 | En prueba (falta backend CDC) | No |
+| CAMBIO-13 | Mantenimiento (PR #4): cambio del token sin cortes (acepta API_TOKEN y API_TOKEN_ANTERIOR), APK 1.1, PENDIENTES al día | En prueba | No |
+| CAMBIO-14 | Aviso diario de vencimientos al grupo contable por Whaticket (PR #5, `AppsScript-AvisoDiario.gs`). Mensaje corto: cantidades por encargado, sólo se nombran los que tienen monto a pagar | En prueba | No |
+| CAMBIO-15 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
+| CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
+| CAMBIO-17 | Recibos de dinero en «Comprobantes»: emitidos por el cliente o por el estudio (honorarios), numerados solos y en PDF A4 original/duplicado con monto en letras; y recibidos por el cliente | En prueba | No |
+| CAMBIO-18 | Importar el «Detalle de comprobantes registrados» de Marangatu (RG 90): al registro de Comprobantes (todos, sin duplicar) y en Libros IVA | En prueba | No |
+| CAMBIO-19 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 (en los commits figura como CAMBIO-15) | En prueba (falta backend CDC) | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -285,7 +291,7 @@ Archivos: `AppsScript-Libros.gs` (nuevo), `AppsScript-Avisos.gs`,
 `src/components/DesktopSidebar.jsx`, `src/components/MobileTabBar.jsx`,
 `src/guia/pasosGuia.jsx`, `tools/smoke/server.mjs`.
 
-### CAMBIO-15 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
+### CAMBIO-19 · XML / KuDE (de Jorgeeayala/Sistema-MJ)
 
 Unificación con el commit `dd191c3` de `Jorgeeayala/Sistema-MJ`
 («Actualizacion De Version Modulo XML/KUDE»), aplicado sobre CAMBIO-13.
@@ -404,3 +410,88 @@ node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 - **WhatsApp Web es real**: probar el envío con el número propio.
 - Las planillas de pruebas quedan en tu Drive: si cargás datos reales en
   ellas, compartirlas sólo con quien hace las pruebas.
+
+### CAMBIO-15 · Timbrado en la carga de comprobantes
+
+- En la ficha del IVA, con «Cargar detalle de comprobantes» activado, cada comprobante tiene ahora el campo **Timbrado**, junto al número.
+- El campo acepta solo números (hasta 8). Si se pega con guiones o espacios (`1764-5321`), se limpian solos.
+- El timbrado se guarda con el resto del detalle (campo `tb` en el JSON de la liquidación). No hace falta tocar el Apps Script.
+- El PDF «Libro de compras y ventas» suma la columna **Timbrado**, entre Comprobante y Cliente/Proveedor.
+- Archivos: `src/iva/IvaEditor.jsx`, `src/iva/ivaCore.js`, `src/iva/iva.css`.
+
+### CAMBIO-16 · Registro de comprobantes (etapa 1)
+
+Es la primera etapa del plan para cargar distintos tipos de documento. Cada comprobante se carga **una sola vez** por cliente, y cada impuesto lee de ahí lo que le corresponde.
+
+- **Sección «Comprobantes»:** está en el menú lateral; en el celular aparece como «Comprob.». Se elige el cliente y el mes, y se ven:
+  - el resumen del mes: ventas, compras e IVA imputado;
+  - filtros por Ventas y Compras, y búsqueda por nombre, RUC, número o timbrado;
+  - la tabla de comprobantes, que en el celular se muestra como tarjetas;
+  - descarga en Excel.
+- **Nuevo comprobante:**
+  - **Operación y tipo:** venta o compra; factura o nota de crédito. En las notas de crédito se indica la factura que corrigen.
+  - **Datos del documento:** fecha, condición, número (`1-1-123` se completa como `001-001-0000123`) y timbrado.
+  - **Contraparte:** RUC y nombre. Si se escribe el RUC sin DV, el dígito verificador se completa solo; si el DV no coincide, aparece un aviso. Los RUC ya usados se sugieren con su nombre.
+  - **Montos:** gravado 10%, gravado 5% y exento, con IVA incluido. El IVA y el total se calculan en el momento. Hay una opción para marcar el 5% agrícola.
+  - **Moneda:** guaraníes o dólares. En dólares se acepta coma decimal y se pide el tipo de cambio.
+  - **Imputación:** a IVA, IRE o IRP-RSP.
+  - **«Guardar y cargar otro»:** deja la fecha, la operación y el tipo listos para el siguiente.
+  - **Duplicados:** si ya hay un comprobante del mismo mes con el mismo número, timbrado y RUC, avisa y no lo guarda.
+  - **Fecha de otro mes:** el comprobante se guarda en ese mes y se avisa antes de guardar.
+- **IVA (Formulario 120):** en Vencimientos IVA → cliente aparece el aviso «N comprobantes imputados a IVA en el registro» con el botón **Traer al formulario**. Ese botón:
+  - carga las casillas con lo imputado a IVA, incluyendo fecha, número, timbrado y RUC para el libro;
+  - pide confirmar si ya había montos cargados, porque los reemplaza.
+- **Backend:** archivo nuevo `AppsScript-Comprobantes.gs`, que crea la hoja «Comprobantes» con una fila por cliente y mes.
+  - Cada alta, cambio o baja toca **un solo** comprobante, con bloqueo, así dos personas pueden cargar el mismo mes a la vez.
+  - Todos los usuarios pueden cargar, editar y borrar. Queda registrado quién cargó y quién modificó cada comprobante.
+- **Hay que pegar en Apps Script:** `AppsScript-Comprobantes.gs` (archivo nuevo) y el `AppsScript-Avisos.gs` actualizado. Después, publicar una nueva versión.
+- **Otros cambios:**
+  - El selector de cliente pasó a `src/comun/` y lo comparten Libros IVA y Comprobantes.
+  - `MoneyInput` está ahora en su propio archivo y acepta decimales.
+  - En la barra inferior del celular, «Estadísticas» se llama «Métricas» para que entren todas las pestañas.
+- **Próximas etapas:**
+  - 2 · Recibos de dinero, emitidos y recibidos.
+  - 3 · IRP: Formularios 515 y 516 con la misma vista que en Marangatu.
+  - 4 · Retenciones, autofacturas e importación RG 90.
+
+### CAMBIO-17 · Recibos de dinero (etapa 2)
+
+- **Dónde está:** en **Comprobantes → Nuevo comprobante**, arriba se elige el tipo: *Factura*, *Nota de crédito* o **Recibo de dinero**.
+- **Quién emite el recibo:**
+  - **Emitido por el cliente:** el cliente cobra. Se cargan quién paga (RUC y nombre), el monto, el concepto, las facturas que cancela, la forma de pago y el detalle (banco o cheque). La dirección, el teléfono y la ciudad del cliente son opcionales; se recuerdan en ese equipo para el próximo recibo.
+  - **Recibido por el cliente:** se registra un recibo que le dieron al cliente, con su número y quién lo emitió.
+  - **Emitido por el estudio (honorarios):** el que paga es el propio cliente y se completa solo. Los datos del estudio salen de *Vencimientos IVA → Colores y feriados → Datos del estudio para los recibos* (RUC, dirección, teléfono y ciudad, campos nuevos).
+- **Numeración:** los recibos emitidos (por el cliente o por el estudio) se numeran solos al guardar (0000001, 0000002…).
+  - Hay un contador por cliente y otro para el estudio, guardados en las propiedades del script (`CP_RECIBO_<RUC>` y `CP_RECIBO_ESTUDIO`).
+  - Si se escribe un número a mano, por ejemplo para seguir la numeración de un talonario, se continúa desde ese.
+  - Al editar un recibo se conserva su número, y no se permiten números repetidos en el mismo mes.
+- **PDF:** con «Guardar y descargar PDF», o después con el ícono de impresora de la lista, se descarga una hoja A4 con **original y duplicado** y una línea de corte entre los dos. Lleva:
+  - los datos de quien emite, el número y el monto destacado;
+  - «Recibí de», la suma **en letras** (en guaraníes o en dólares con centavos), el concepto, las facturas y la forma de pago;
+  - el lugar, la fecha y la línea de firma.
+  
+  Los datos de quien emite quedan guardados con el recibo, así una reimpresión sale igual que la original.
+- **Lista:**
+  - Hay una pestaña **Recibos**. Ventas y Compras muestran solo facturas y notas de crédito.
+  - Se agrega la tarjeta «Recibos» al resumen.
+  - El Excel incluye los recibos.
+  - Los recibos **no** cuentan en los totales de ventas y compras ni pasan al Formulario 120.
+- **Para que funcione con los datos reales:** pegar el `AppsScript-Comprobantes.gs` nuevo y publicar una nueva versión.
+
+### CAMBIO-18 · Importar el detalle de comprobantes registrados de Marangatu
+
+- **El formato:** es el Excel `DetalleComprobantesRegistrados_….xlsx` que baja de Marangatu (registro de comprobantes, RG 90). Trae una fila por comprobante con informante, informado, tipo de registro, tipo de comprobante, fecha, timbrado, número, CDC, montos gravados con IVA incluido, IVA, exento, total, imputación y comprobante asociado. Las columnas se reconocen por su título, no por su posición.
+- **Comprobantes → «Importar de Marangatu»:**
+  - Lee el archivo y muestra cuántos comprobantes hay de ventas y de compras, y de qué meses.
+  - Compara el IVA calculado con el que trae el archivo.
+  - Propone el cliente por el RUC del informante. Si ese RUC no está en la lista, se elige a mano; si no coincide con el cliente elegido, avisa.
+  - Muestra una vista previa antes de importar.
+  - Importa **todos** los comprobantes, de cualquier mes, cada uno en su mes, con su timbrado, el RUC del informado con el DV calculado, la condición y la imputación IVA/IRE/IRP.
+  - Las notas de crédito pasan como NC, con el comprobante asociado. Los demás tipos (autofactura, boleta, ticket…) se cargan como factura, con el tipo original en la nota. El CDC también queda en la nota.
+  - Si se vuelve a importar el mismo archivo, **no se duplica**: avisa «N ya estaban».
+- **Libros IVA → Importar libro:** además de SIGA, acepta este archivo.
+  - Arma el libro de ventas o de compras del mes. Si el archivo trae los dos, se elige con «Libro» y se importa otra vez.
+  - Propone el cliente por el RUC del informante.
+  - Avisa si el archivo trae comprobantes de otros meses que no entran en ese libro.
+- **Backend:** acción nueva `comprobantesImportar`, que guarda en bloque, un mes por escritura, con bloqueo. Hay que pegar el `AppsScript-Comprobantes.gs` nuevo y publicar una nueva versión.
+- **Prueba hecha:** con el archivo de ejemplo, 4 facturas de venta de octubre 2026. El IVA calculado coincide con el de Marangatu (Gs. 2.706.400) y el DV de los 4 RUC da bien. Ese archivo **no** se sube al repositorio.

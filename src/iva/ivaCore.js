@@ -132,7 +132,14 @@ export function normalizeConfig(raw) {
     mora: { ...DEFAULT_MORA, ...(c.mora || {}) },
     firma: c.firma || '',
     sitioWeb: normalizarSitioWeb(c.sitioWeb),
+    estudio: datosEstudio(c.estudio),
   };
+}
+// Datos del estudio para los recibos de honorarios.
+export function datosEstudio(raw) {
+  const e = raw || {};
+  const t = (v, n) => String(v || '').trim().slice(0, n);
+  return { ruc: t(e.ruc, 20), direccion: t(e.direccion, 120), telefono: t(e.telefono, 40), ciudad: t(e.ciudad, 60) };
 }
 export function firma(config) { return (config && config.firma) || DEFAULT_FIRMA; }
 // Dirección web válida (http/https) o '' si no lo es. Acepta «www.x.com».
@@ -170,9 +177,9 @@ export function vencDe(config, cl, l, periodo) {
 /* ---------- Liquidación ---------- */
 export function getItems(l, k) {
   const v = l && l[k];
-  if (Array.isArray(v)) return v.map((x) => ({ m: Number(x.m) || 0, iva: !!x.iva, f: x.f || '', n: x.n || '', t: x.t || '' }));
+  if (Array.isArray(v)) return v.map((x) => ({ m: Number(x.m) || 0, iva: !!x.iva, f: x.f || '', n: x.n || '', tb: x.tb || '', t: x.t || '' }));
   const n = Number(v) || 0;
-  return n ? [{ m: n, iva: IVA_DEFAULT, f: '', n: '', t: '' }] : [];
+  return n ? [{ m: n, iva: IVA_DEFAULT, f: '', n: '', tb: '', t: '' }] : [];
 }
 export function rowCalc(r, x) {
   const m = x.m;
@@ -229,7 +236,7 @@ export function calc(l, ctx) {
 
 // Deja cada lista con al menos una fila vacía para editar.
 export function normDraft(d) {
-  LISTS.forEach((L) => { let rows = getItems(d, L.k); if (!rows.length) rows = [{ m: 0, iva: IVA_DEFAULT_NUEVO, f: '', n: '', t: '' }]; d[L.k] = rows; });
+  LISTS.forEach((L) => { let rows = getItems(d, L.k); if (!rows.length) rows = [{ m: 0, iva: IVA_DEFAULT_NUEVO, f: '', n: '', tb: '', t: '' }]; d[L.k] = rows; });
   return d;
 }
 // Quita filas vacías y campos sin uso antes de guardar.
@@ -240,6 +247,7 @@ export function cleanDraft(d) {
       const r = { m: Number(x.m), iva: !!x.iva };
       if (x.f) r.f = x.f;
       if (x.n) r.n = String(x.n).slice(0, 40);
+      if (x.tb) r.tb = String(x.tb).replace(/\D/g, '').slice(0, 8);
       if (x.t) r.t = String(x.t).slice(0, 80);
       return r;
     });
@@ -404,7 +412,7 @@ export function libroData(l) {
         if (!x.m) return;
         const rc = rowCalc(r, x);
         rows.push({
-          f: x.f, n: x.n, t: x.t, seq: seq++, nc: sg < 0,
+          f: x.f, n: x.n, tb: x.tb, t: x.t, seq: seq++, nc: sg < 0,
           b10: col === 'b10' ? sg * rc.base : 0, i10: col === 'b10' ? sg * rc.iva : 0, b5: col === 'b5' ? sg * rc.base : 0, i5: col === 'b5' ? sg * rc.iva : 0, ex: col === 'ex' ? sg * rc.base : 0, total: sg * rc.total,
         });
       });
@@ -423,7 +431,7 @@ export async function loadJsPDF() {
   return mod.jsPDF || mod.default;
 }
 function rgb(hex) { const x = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)); }
-function pdfSafe(s) {
+export function pdfSafe(s) {
   // oxlint-disable-next-line no-control-regex -- se quitan caracteres fuera de Latin-1, que jsPDF no dibuja
   return String(s ?? '').replace(/[–—]/g, '-').replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '');
 }
@@ -485,7 +493,7 @@ export async function exportLibroPDF(ctx, l) {
   const c = ctx.cliente, firmaTxt = firma(ctx.config);
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const PW = 297, PH = 210, M = 12, RH = 5.4;
-  const W = [7, 19, 36, 60, 26, 22, 26, 20, 24, 26], AL = ['c', 'l', 'l', 'l', 'r', 'r', 'r', 'r', 'r', 'r'];
+  const W = [7, 19, 34, 18, 44, 26, 22, 26, 20, 24, 26], AL = ['c', 'l', 'l', 'l', 'l', 'r', 'r', 'r', 'r', 'r', 'r'];
   const X = [];
   W.reduce((a, w, i) => { X[i] = a; return a + w; }, M);
   const fmt = (v) => (v ? gs(v) : '');
@@ -502,7 +510,7 @@ export async function exportLibroPDF(ctx, l) {
   };
   const tHead = (bk) => {
     doc.setFillColor(27, 51, 88); doc.rect(M, y, PW - 2 * M, 6.4, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-    const labs = ['#', 'Fecha', 'Comprobante', bk === 'ventas' ? 'Cliente' : 'Proveedor', 'Base 10%', 'IVA 10%', 'Base 5%', 'IVA 5%', 'Exento', 'Total'];
+    const labs = ['#', 'Fecha', 'Comprobante', 'Timbrado', bk === 'ventas' ? 'Cliente' : 'Proveedor', 'Base 10%', 'IVA 10%', 'Base 5%', 'IVA 5%', 'Exento', 'Total'];
     labs.forEach((t, i) => doc.text(t, xOf(i), y + 4.4, { align: alignOf(AL[i]) }));
     y += 6.4;
   };
@@ -518,7 +526,7 @@ export async function exportLibroPDF(ctx, l) {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(20, 33, 58);
       const fecha = r.f ? fechaCorta(fromIso(r.f)) : '-';
       const comp = (r.nc ? 'NC ' : '') + (r.n || (r.f || r.t ? '' : '(total cargado)'));
-      const vals = [String(i + 1), fecha, comp, r.t, fmt(r.b10), fmt(r.i10), fmt(r.b5), fmt(r.i5), fmt(r.ex), fmt(r.total)];
+      const vals = [String(i + 1), fecha, comp, r.tb || '', r.t, fmt(r.b10), fmt(r.i10), fmt(r.b5), fmt(r.i5), fmt(r.ex), fmt(r.total)];
       vals.forEach((t, j) => {
         const s = pdfSafe(doc.splitTextToSize(String(t), W[j] - 3.2)[0] || '');
         if (r.nc && AL[j] === 'r') doc.setTextColor(180, 35, 24); else doc.setTextColor(20, 33, 58);
@@ -529,7 +537,7 @@ export async function exportLibroPDF(ctx, l) {
     need(RH + 1, bk);
     doc.setFillColor(230, 236, 242); doc.rect(M, y, PW - 2 * M, RH + 1, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(20, 33, 58);
     doc.text('TOTAL (' + B.rows.length + ' comprobantes)', X[1] + 1.6, y + 4.2);
-    [['b10', 4], ['i10', 5], ['b5', 6], ['i5', 7], ['ex', 8], ['total', 9]].forEach(([q, j]) => doc.text(gs(B.tot[q]), X[j] + W[j] - 1.6, y + 4.2, { align: 'right' }));
+    [['b10', 5], ['i10', 6], ['b5', 7], ['i5', 8], ['ex', 9], ['total', 10]].forEach(([q, j]) => doc.text(gs(B.tot[q]), X[j] + W[j] - 1.6, y + 4.2, { align: 'right' }));
     y += RH + 9;
   };
   pageHead();

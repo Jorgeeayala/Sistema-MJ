@@ -14,6 +14,7 @@ import {
   firma,
   normalizarSitioWeb,
   sitioWeb,
+  datosEstudio,
   gs,
   lastDigit,
   normalizeConfig,
@@ -31,6 +32,7 @@ import {
 import { findDvColumn, findWhatsappColumn, initialPeriodo } from './ivaPeriodo';
 import './iva.css';
 import { fijarSitioWeb } from '../estudio/sitioWeb';
+import { invalidarIvaConfig } from './ivaConfigCache';
 
 const IvaEditor = lazy(() => import('./IvaEditor'));
 
@@ -199,6 +201,7 @@ export default function IvaModule({ withDesktopSidebar = false, initialRuc = nul
     setConfig(next);
     try {
       await api.iva.saveConfig(next);
+      invalidarIvaConfig();
       return true;
     } catch (error) {
       setConfig(prev);
@@ -590,6 +593,30 @@ function AjustesView({ config, canEdit, onSave, toast }) {
               }}
             />
           </div>
+        </div>
+      </div>
+
+      <div className="iva-panel">
+        <h2>Datos del estudio para los recibos</h2>
+        <p>Se imprimen en los recibos de honorarios que emite el estudio (sección Comprobantes).</p>
+        <div className="iva-morag">
+          {[['ruc', 'RUC', '80012345-6'], ['telefono', 'Teléfono', '0981 123456'], ['direccion', 'Dirección', 'Calle y número'], ['ciudad', 'Ciudad', 'Asunción']].map(([k, label, ph]) => (
+            <div key={k}>
+              <label htmlFor={`iva-estudio-${k}`}>{label}</label>
+              <input
+                id={`iva-estudio-${k}`}
+                className="left"
+                placeholder={ph}
+                defaultValue={(config.estudio && config.estudio[k]) || ''}
+                onBlur={async (e) => {
+                  const value = e.target.value.trim();
+                  const actual = datosEstudio(config.estudio);
+                  if (value === actual[k]) return;
+                  if (await onSave({ ...config, estudio: datosEstudio({ ...actual, [k]: value }) })) toast('Datos del estudio guardados');
+                }}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
