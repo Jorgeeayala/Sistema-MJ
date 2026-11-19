@@ -3306,8 +3306,11 @@ function handleLibrosAction(action, body, sessionUser, sessionRole) {
  * MÓDULO COMPROBANTES - archivo aparte del backend de Control Clientes.
  *
  * Registro de comprobantes por cliente (facturas y notas de crédito de
- * ventas y compras, con timbrado y a qué impuesto se imputan). La app arma
- * desde acá el Formulario 120 de IVA y, más adelante, el IRP.
+ * ventas y compras, con timbrado y a qué impuesto se imputan, y recibos de
+ * dinero emitidos o recibidos). La app arma desde acá el Formulario 120 de
+ * IVA y, más adelante, el IRP. Los recibos que emite el sistema (del cliente
+ * o de honorarios del estudio) se numeran solos: el contador de cada emisor
+ * queda en las propiedades del script (CP_RECIBO_<RUC> y CP_RECIBO_ESTUDIO).
  *
  * Instalación en el proyecto de Apps Script:
  *   1. Archivo nuevo (+ > Secuencia de comandos) llamado "Comprobantes" y
@@ -3389,37 +3392,83 @@ function cpLeerLista_(sheet, fila) {
 }
 
 // Lo mismo que normalizar() de comprobantesCore.js.
+const CP_FORMAS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro'];
+const CP_EMISORES = ['cliente', 'tercero', 'estudio'];
+
 function cpNormalizar_(c, usuario) {
   c = c || {};
-  const tipo = c.tipo === 'nc' ? 'nc' : 'factura';
+  const tipo = c.tipo === 'nc' || c.tipo === 'recibo' ? c.tipo : 'factura';
   const moneda = c.moneda === 'USD' ? 'USD' : 'PYG';
-  const imp = c.imputa || {};
-  const numero = cpTexto_(c.numero, 40);
-  return {
+  const out = {
     id: cpTexto_(c.id, 60) || 'cp-' + Utilities.getUuid(),
-    op: c.op === 'compra' ? 'compra' : 'venta',
     tipo: tipo,
     fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(c.fecha || '')) ? String(c.fecha) : '',
-    numero: numero,
-    timbrado: cpTexto_(c.timbrado, 20).replace(/\D/g, '').slice(0, 8),
-    condicion: c.condicion === 'credito' ? 'credito' : 'contado',
     moneda: moneda,
     cambio: moneda === 'USD' ? cpNum_(c.cambio) : 0,
     ruc: cpTexto_(c.ruc, 20).toUpperCase(),
     nombre: cpTexto_(c.nombre, 120),
-    g10: cpNum_(c.g10), g5: cpNum_(c.g5), ex: cpNum_(c.ex),
-    agro: !!c.agro && cpNum_(c.g5) > 0,
-    imputa: { iva: !!imp.iva, ire: !!imp.ire, irp: !!imp.irp },
-    asociado: tipo === 'nc' ? cpTexto_(c.asociado, 40) : '',
     nota: cpTexto_(c.nota, 200),
     cargadoPor: cpTexto_(usuario, 80),
     cargadoEl: new Date().toISOString()
   };
+  if (tipo === 'recibo') {
+    const emisor = CP_EMISORES.indexOf(c.emisor) >= 0 ? c.emisor : 'cliente';
+    out.op = emisor === 'cliente' ? 'venta' : 'compra';
+    out.emisor = emisor;
+    out.numero = cpTexto_(c.numero, 40);
+    out.monto = cpNum_(c.monto);
+    out.concepto = cpTexto_(c.concepto, 300);
+    out.facturas = cpTexto_(c.facturas, 200);
+    out.formaPago = CP_FORMAS_PAGO.indexOf(c.formaPago) >= 0 ? c.formaPago : 'efectivo';
+    out.detallePago = cpTexto_(c.detallePago, 120);
+    out.imputa = { iva: false, ire: false, irp: false };
+    if (emisor !== 'tercero' && c.emisorDatos) {
+      const e = c.emisorDatos;
+      out.emisorDatos = {
+        nombre: cpTexto_(e.nombre, 120), ruc: cpTexto_(e.ruc, 20), direccion: cpTexto_(e.direccion, 120),
+        telefono: cpTexto_(e.telefono, 40), ciudad: cpTexto_(e.ciudad, 60)
+      };
+    }
+    return out;
+  }
+  const imp = c.imputa || {};
+  out.op = c.op === 'compra' ? 'compra' : 'venta';
+  out.numero = cpTexto_(c.numero, 40);
+  out.timbrado = cpTexto_(c.timbrado, 20).replace(/\D/g, '').slice(0, 8);
+  out.condicion = c.condicion === 'credito' ? 'credito' : 'contado';
+  out.g10 = cpNum_(c.g10);
+  out.g5 = cpNum_(c.g5);
+  out.ex = cpNum_(c.ex);
+  out.agro = !!c.agro && cpNum_(c.g5) > 0;
+  out.imputa = { iva: !!imp.iva, ire: !!imp.ire, irp: !!imp.irp };
+  out.asociado = tipo === 'nc' ? cpTexto_(c.asociado, 40) : '';
+  return out;
+}
+
+// Numeración de los recibos que emite el sistema: un contador por emisor
+// (el estudio, o cada cliente por su RUC) en las propiedades del script.
+// Se llama dentro del bloqueo. Si se escribe un número a mano más alto, el
+// contador sigue desde ese.
+function cpClaveContador_(c, ruc) {
+  return 'CP_RECIBO_' + (c.emisor === 'estudio' ? 'ESTUDIO' : ruc);
+}
+function cpNumerarRecibo_(c, ruc) {
+  if (c.tipo !== 'recibo' || c.emisor === 'tercero') return;
+  const props = PropertiesService.getScriptProperties();
+  const clave = cpClaveContador_(c, ruc);
+  const actual = Number(props.getProperty(clave)) || 0;
+  if (!c.numero) {
+    c.numero = String(actual + 1).padStart(7, '0');
+    props.setProperty(clave, String(actual + 1));
+  } else if (/^\d+$/.test(c.numero) && Number(c.numero) > actual) {
+    props.setProperty(clave, String(Number(c.numero)));
+  }
 }
 
 function cpTotales_(lista) {
   const t = { ventas: 0, compras: 0, ivaVentas: 0, ivaCompras: 0 };
   lista.forEach(function (c) {
+    if (c.tipo === 'recibo') return;
     const f = c.moneda === 'USD' ? Number(c.cambio) || 0 : 1;
     const g10 = Math.round((Number(c.g10) || 0) * f);
     const g5 = Math.round((Number(c.g5) || 0) * f);
@@ -3489,7 +3538,7 @@ function handleComprobantesGuardar(body, sessionUser) {
   if (!ruc) return errorResponse('Elegí el cliente', 'COMPROBANTES_DATOS');
   const c = cpNormalizar_(body.comprobante, sessionUser);
   if (!c.fecha) return errorResponse('Falta la fecha del comprobante', 'COMPROBANTE_FECHA');
-  if (!(c.g10 || c.g5 || c.ex)) return errorResponse('El comprobante no tiene montos', 'COMPROBANTE_VACIO');
+  if (c.tipo === 'recibo' ? !c.monto : !(c.g10 || c.g5 || c.ex)) return errorResponse('El comprobante no tiene montos', 'COMPROBANTE_VACIO');
   const periodo = c.fecha.slice(0, 7);
   const anterior = cpTexto_(body.periodoAnterior, 10);
 
@@ -3501,11 +3550,18 @@ function handleComprobantesGuardar(body, sessionUser) {
     const reg = cpBuscar_(indice, ruc, periodo);
     let lista = reg ? cpLeerLista_(sheet, reg.fila) : [];
     const sinDv = function (r) { return String(r || '').replace(/\D/g, ''); };
+    // Al editar un recibo se conserva su número; los nuevos se numeran acá.
+    const previo = lista.filter(function (x) { return x.id === c.id; })[0];
+    if (c.tipo === 'recibo' && !c.numero && previo && previo.numero) c.numero = previo.numero;
     const dup = lista.filter(function (x) {
-      return x.id !== c.id && x.op === c.op && x.tipo === c.tipo && c.numero && x.numero === c.numero &&
-        (x.timbrado || '') === c.timbrado && sinDv(x.ruc) === sinDv(c.ruc);
+      if (x.id === c.id || x.tipo !== c.tipo || !c.numero || x.numero !== c.numero) return false;
+      if (c.tipo === 'recibo') {
+        return (x.emisor || 'cliente') === c.emisor && (c.emisor !== 'tercero' || sinDv(x.ruc) === sinDv(c.ruc));
+      }
+      return x.op === c.op && (x.timbrado || '') === c.timbrado && sinDv(x.ruc) === sinDv(c.ruc);
     })[0];
     if (dup) return jsonResponse({ ok: false, code: 'COMPROBANTE_DUPLICADO', error: 'Ese comprobante ya está cargado en ese mes', existente: dup });
+    cpNumerarRecibo_(c, ruc);
 
     const i = lista.map(function (x) { return x.id; }).indexOf(c.id);
     // Si viene de otro mes, conserva quién lo cargó primero.

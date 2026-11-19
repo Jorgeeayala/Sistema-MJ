@@ -48,6 +48,7 @@ original.
 | CAMBIO-14 | Aviso diario de vencimientos al grupo contable por Whaticket (PR #5, `AppsScript-AvisoDiario.gs`). Mensaje corto: cantidades por encargado, sólo se nombran los que tienen monto a pagar | En prueba | No |
 | CAMBIO-15 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
 | CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
+| CAMBIO-17 | Recibos de dinero en «Comprobantes»: emitidos por el cliente o por el estudio (honorarios), numerados solos y en PDF A4 original/duplicado con monto en letras; y recibidos por el cliente | En prueba | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -414,3 +415,27 @@ Es la primera etapa del plan para cargar distintos tipos de documento. Cada comp
   - 2 · Recibos de dinero, emitidos y recibidos.
   - 3 · IRP: Formularios 515 y 516 con la misma vista que en Marangatu.
   - 4 · Retenciones, autofacturas e importación RG 90.
+
+### CAMBIO-17 · Recibos de dinero (etapa 2)
+
+- **Dónde está:** en **Comprobantes → Nuevo comprobante**, arriba se elige el tipo: *Factura*, *Nota de crédito* o **Recibo de dinero**.
+- **Quién emite el recibo:**
+  - **Emitido por el cliente:** el cliente cobra. Se cargan quién paga (RUC y nombre), el monto, el concepto, las facturas que cancela, la forma de pago y el detalle (banco o cheque). La dirección, el teléfono y la ciudad del cliente son opcionales; se recuerdan en ese equipo para el próximo recibo.
+  - **Recibido por el cliente:** se registra un recibo que le dieron al cliente, con su número y quién lo emitió.
+  - **Emitido por el estudio (honorarios):** el que paga es el propio cliente y se completa solo. Los datos del estudio salen de *Vencimientos IVA → Colores y feriados → Datos del estudio para los recibos* (RUC, dirección, teléfono y ciudad, campos nuevos).
+- **Numeración:** los recibos emitidos (por el cliente o por el estudio) se numeran solos al guardar (0000001, 0000002…).
+  - Hay un contador por cliente y otro para el estudio, guardados en las propiedades del script (`CP_RECIBO_<RUC>` y `CP_RECIBO_ESTUDIO`).
+  - Si se escribe un número a mano, por ejemplo para seguir la numeración de un talonario, se continúa desde ese.
+  - Al editar un recibo se conserva su número, y no se permiten números repetidos en el mismo mes.
+- **PDF:** con «Guardar y descargar PDF», o después con el ícono de impresora de la lista, se descarga una hoja A4 con **original y duplicado** y una línea de corte entre los dos. Lleva:
+  - los datos de quien emite, el número y el monto destacado;
+  - «Recibí de», la suma **en letras** (en guaraníes o en dólares con centavos), el concepto, las facturas y la forma de pago;
+  - el lugar, la fecha y la línea de firma.
+  
+  Los datos de quien emite quedan guardados con el recibo, así una reimpresión sale igual que la original.
+- **Lista:**
+  - Hay una pestaña **Recibos**. Ventas y Compras muestran solo facturas y notas de crédito.
+  - Se agrega la tarjeta «Recibos» al resumen.
+  - El Excel incluye los recibos.
+  - Los recibos **no** cuentan en los totales de ventas y compras ni pasan al Formulario 120.
+- **Para que funcione con los datos reales:** pegar el `AppsScript-Comprobantes.gs` nuevo y publicar una nueva versión.

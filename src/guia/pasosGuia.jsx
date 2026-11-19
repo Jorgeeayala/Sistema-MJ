@@ -52,7 +52,7 @@ export function construirPasosGuia({ canAssign, isSuper, conAsistente = false })
             <li><strong>Estadísticas</strong> («Métricas» en el celular): cómo viene el mes.</li>
             <li><strong>Clientes</strong>: la cartera del período y la ficha de cada uno.</li>
             <li><strong>Vencimientos IVA</strong> («IVA» en el celular): liquidaciones y fichas para el cliente.</li>
-            <li><strong>Comprobantes</strong> («Comprob.» en el celular): facturas y notas de crédito de cada cliente, con timbrado.</li>
+            <li><strong>Comprobantes</strong> («Comprob.» en el celular): facturas, notas de crédito y recibos de cada cliente.</li>
             <li><strong>Libros IVA</strong> («Libros» en el celular): compras y ventas importados de SIGA.</li>
             {canAssign && <li><strong>Asignar clientes</strong>: el reparto entre el equipo.</li>}
             {canAssign && <li><strong>Marcaciones</strong> («Horas» en el celular): horas a favor y en contra del personal.</li>}
@@ -339,11 +339,12 @@ export function construirPasosGuia({ canAssign, isSuper, conAsistente = false })
     body: (
       <>
         <p>
-          Acá se cargan las <strong>facturas y notas de crédito</strong> de cada cliente, de ventas y de compras, una sola vez.
+          Acá se cargan las <strong>facturas, notas de crédito y recibos de dinero</strong> de cada cliente, una sola vez.
         </p>
         <ul>
           <li>Elegí el cliente y el mes, y tocá <strong>Nuevo comprobante</strong>: fecha, número, <strong>timbrado</strong>, RUC (el dígito verificador se completa solo), montos con IVA incluido y a qué impuesto se imputa.</li>
           <li><strong>Guardar y cargar otro</strong> deja la fecha y el tipo listos para el siguiente.</li>
+          <li><strong>Recibo de dinero</strong>: emitido por el cliente, recibido por el cliente o de honorarios del estudio. Los emitidos se numeran solos y salen en PDF (original y duplicado) con el monto en letras.</li>
           <li>Lo imputado a IVA se pasa al Formulario 120 desde <strong>Vencimientos IVA</strong> → el cliente → <strong>Traer al formulario</strong>.</li>
         </ul>
         {tip(<>Si cargás una fecha de otro mes, el comprobante se guarda en ese mes.</>)}

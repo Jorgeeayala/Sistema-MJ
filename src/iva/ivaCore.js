@@ -132,7 +132,14 @@ export function normalizeConfig(raw) {
     mora: { ...DEFAULT_MORA, ...(c.mora || {}) },
     firma: c.firma || '',
     sitioWeb: normalizarSitioWeb(c.sitioWeb),
+    estudio: datosEstudio(c.estudio),
   };
+}
+// Datos del estudio para los recibos de honorarios.
+export function datosEstudio(raw) {
+  const e = raw || {};
+  const t = (v, n) => String(v || '').trim().slice(0, n);
+  return { ruc: t(e.ruc, 20), direccion: t(e.direccion, 120), telefono: t(e.telefono, 40), ciudad: t(e.ciudad, 60) };
 }
 export function firma(config) { return (config && config.firma) || DEFAULT_FIRMA; }
 // Dirección web válida (http/https) o '' si no lo es. Acepta «www.x.com».
@@ -424,7 +431,7 @@ export async function loadJsPDF() {
   return mod.jsPDF || mod.default;
 }
 function rgb(hex) { const x = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)); }
-function pdfSafe(s) {
+export function pdfSafe(s) {
   // oxlint-disable-next-line no-control-regex -- se quitan caracteres fuera de Latin-1, que jsPDF no dibuja
   return String(s ?? '').replace(/[–—]/g, '-').replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '');
 }

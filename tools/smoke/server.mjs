@@ -132,6 +132,7 @@ const comprobantes = new Map();
 const cpTotales = (lista) => {
   const t = { ventas: 0, compras: 0, ivaVentas: 0, ivaCompras: 0 };
   for (const c of lista) {
+    if (c.tipo === 'recibo') continue;
     const f = c.moneda === 'USD' ? Number(c.cambio) || 0 : 1;
     const g10 = Math.round((Number(c.g10) || 0) * f), g5 = Math.round((Number(c.g5) || 0) * f), ex = Math.round((Number(c.ex) || 0) * f);
     const s = c.tipo === 'nc' ? -1 : 1, iva = Math.round(g10 / 11) + Math.round(g5 / 21);
@@ -140,6 +141,7 @@ const cpTotales = (lista) => {
   return t;
 };
 const cpMeta = new Map(); // clave → { cliente, modificadoPor, modificadoEl }
+const cpContadores = new Map(); // numeración de recibos: 'ESTUDIO' o RUC → último número
 // Preferencias por usuario (AppsScript-Preferencias.gs).
 const preferencias = new Map();
 const AMBIENTES_OK = ['ninguna', 'automatica', 'navidad', 'anio-nuevo', 'semana-santa', 'independencia', 'san-juan', 'verano', 'otono', 'invierno', 'primavera'];
@@ -481,15 +483,29 @@ export async function handle(body) {
       const c = { ...(body.comprobante || {}) };
       if (!ruc) return { ok: false, code: 'COMPROBANTES_DATOS', error: 'Elegí el cliente' };
       if (!/^\d{4}-\d{2}-\d{2}$/.test(c.fecha || '')) return { ok: false, code: 'COMPROBANTE_FECHA', error: 'Falta la fecha del comprobante' };
-      if (!(Number(c.g10) || Number(c.g5) || Number(c.ex))) return { ok: false, code: 'COMPROBANTE_VACIO', error: 'El comprobante no tiene montos' };
+      const esRec = c.tipo === 'recibo';
+      if (esRec ? !(Number(c.monto) > 0) : !(Number(c.g10) || Number(c.g5) || Number(c.ex))) return { ok: false, code: 'COMPROBANTE_VACIO', error: 'El comprobante no tiene montos' };
+      if (esRec) { c.emisor = ['cliente', 'tercero', 'estudio'].includes(c.emisor) ? c.emisor : 'cliente'; c.op = c.emisor === 'cliente' ? 'venta' : 'compra'; c.numero = String(c.numero || '').trim(); }
       c.id = c.id || `cp-${Math.random().toString(36).slice(2)}`;
       c.timbrado = String(c.timbrado || '').replace(/\D/g, '').slice(0, 8);
       const periodo = c.fecha.slice(0, 7);
       const k = `${ruc}|${periodo}`;
       const lista = comprobantes.get(k) || [];
       const sinDv = (r) => String(r || '').replace(/\D/g, '');
-      const dup = lista.find((x) => x.id !== c.id && x.op === c.op && x.tipo === c.tipo && c.numero && x.numero === c.numero && (x.timbrado || '') === c.timbrado && sinDv(x.ruc) === sinDv(c.ruc));
+      const previo = lista.find((x) => x.id === c.id);
+      if (esRec && !c.numero && previo && previo.numero) c.numero = previo.numero;
+      const dup = lista.find((x) => {
+        if (x.id === c.id || x.tipo !== c.tipo || !c.numero || x.numero !== c.numero) return false;
+        if (esRec) return (x.emisor || 'cliente') === c.emisor && (c.emisor !== 'tercero' || sinDv(x.ruc) === sinDv(c.ruc));
+        return x.op === c.op && (x.timbrado || '') === c.timbrado && sinDv(x.ruc) === sinDv(c.ruc);
+      });
       if (dup) return { ok: false, code: 'COMPROBANTE_DUPLICADO', error: 'Ese comprobante ya está cargado en ese mes', existente: dup };
+      if (esRec && c.emisor !== 'tercero') {
+        const kc = c.emisor === 'estudio' ? 'ESTUDIO' : ruc;
+        const act = cpContadores.get(kc) || 0;
+        if (!c.numero) { c.numero = String(act + 1).padStart(7, '0'); cpContadores.set(kc, act + 1); }
+        else if (/^\d+$/.test(c.numero) && Number(c.numero) > act) cpContadores.set(kc, Number(c.numero));
+      }
       const i = lista.findIndex((x) => x.id === c.id);
       if (i >= 0) { c.cargadoPor = lista[i].cargadoPor; c.cargadoEl = lista[i].cargadoEl; c.modificadoPor = session.user; lista[i] = c; }
       else { c.cargadoPor = session.user; c.cargadoEl = new Date().toISOString(); lista.push(c); }
