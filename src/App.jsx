@@ -21,7 +21,7 @@ const XmlToolModule = lazy(() => import('./xml/XmlToolModule'));
 onPrivateDataCleared(olvidarPlanilla);
 import AppSplashLoader from './components/AppSplashLoader';
 import ScreenErrorBoundary from './components/ScreenErrorBoundary';
-import MobileTabBar from './components/MobileTabBar';
+import MobileTabBar, { MobileMenuButton } from './components/MobileTabBar';
 import DesktopSidebar from './components/DesktopSidebar';
 import useMediaQuery from './hooks/useMediaQuery';
 import useAvisos from './hooks/useAvisos';
@@ -164,7 +164,12 @@ export default function App({
   const canAssignClients =
     !readOnlyPreview && (userRole === 'SUPERUSUARIO' || userRole === 'ADMINISTRADOR');
   const authReady = !user || authState.status !== 'checking';
-  const buzon = useAvisos(authenticated && !readOnlyPreview, `${user || ''}|${activeSessionToken}`);
+  // Navegación del teléfono: barra inferior + menú ☰ arriba a la izquierda.
+  const mostrarNavMovil = Boolean(
+    uiMode === 'executive' && isMobilePeriodNav && authenticated && year && month &&
+      !selectedClient && !creatingWithHeaders
+  );
+  const buzon =useAvisos(authenticated && !readOnlyPreview, `${user || ''}|${activeSessionToken}`);
   const initialContentReady = initialScreenReady && authReady;
   const isAdminUser = userRole === 'SUPERUSUARIO' || userRole === 'ADMINISTRADOR';
   // Página web del estudio (configurable en Vencimientos IVA → Colores y feriados).
@@ -928,7 +933,15 @@ export default function App({
         <header className="real-exec-navbar">
           {/* Sin marca: el logo y el lema no aportan a la operación diaria.
               La barra queda limpia con las acciones (período, actualizar,
-              configuración, usuario). */}
+              configuración, usuario). En el teléfono, a la izquierda, el
+              menú ☰ con las secciones que no entran en la barra inferior. */}
+          {mostrarNavMovil && (
+            <MobileMenuButton
+              activeTab={assignClientsOpen ? 'assign' : mobileTab}
+              canAssignClients={canAssignClients}
+              onChange={handleMobileTabChange}
+            />
+          )}
           {ambienteActivo && (
             <>
               <span className="rx-amb-strip" aria-hidden="true" />
@@ -1373,14 +1386,12 @@ export default function App({
           />
         )}
 
-      {uiMode === 'executive' && isMobilePeriodNav && authenticated && year && month &&
-        !selectedClient && !creatingWithHeaders && (
-          <MobileTabBar
-            activeTab={assignClientsOpen ? 'assign' : mobileTab}
-            canAssignClients={canAssignClients}
-            onChange={handleMobileTabChange}
-          />
-        )}
+      {mostrarNavMovil && (
+        <MobileTabBar
+          activeTab={assignClientsOpen ? 'assign' : mobileTab}
+          onChange={handleMobileTabChange}
+        />
+      )}
 
       {(settingsOpen || mustChangePin) && (
       <Suspense fallback={null}>

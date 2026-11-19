@@ -1861,7 +1861,7 @@
   }
 
   .real-exec-mobile-tabs button {
-    /* 4 pestañas fijas + «Más» (el resto va en el menú) en 360px. */
+    /* 4 pestañas fijas (el resto va en el menú ☰ de arriba) en 360px. */
     min-width: 0;
     max-width: 120px;
     display: flex;
@@ -1904,7 +1904,30 @@
     background: var(--rx-brand-soft);
   }
 
-  /* Menú «Más»: panel sobre la barra inferior con las secciones restantes. */
+  /* Menú ☰ arriba a la izquierda: secciones que no entran en la barra inferior. */
+  .real-exec-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    min-height: 36px;
+    margin-right: auto;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.045);
+    color: #d2d3d6;
+    cursor: pointer;
+  }
+  /* Con ambientación, la píldora del saludo queda al lado del ☰. */
+  .real-exec-menu-button:has(~ .rx-amb-pill) {
+    margin-right: 0;
+  }
+  .real-exec-menu-button.is-active {
+    border-color: rgba(111, 165, 195, 0.55);
+    background: rgba(111, 165, 195, 0.16);
+    color: #9fc4d8;
+  }
   .real-exec-mobile-mas-fondo {
     position: fixed;
     z-index: 138;
@@ -1914,9 +1937,9 @@
   .real-exec-mobile-mas {
     position: fixed;
     z-index: 139;
-    right: 8px;
-    bottom: calc(66px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    top: calc(66px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
     left: 8px;
+    width: min(320px, calc(100vw - 16px));
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -1924,7 +1947,7 @@
     border: 1px solid var(--rx-line);
     border-radius: 16px;
     background: var(--rx-surface);
-    box-shadow: 0 -10px 30px rgba(28, 31, 35, 0.18);
+    box-shadow: 0 12px 30px rgba(28, 31, 35, 0.22);
   }
   .real-exec-mobile-mas button {
     display: flex;

@@ -9,7 +9,7 @@ const TABS = [
   { id: 'comprobantes', label: 'Comprob.', Icon: FileText },
 ];
 
-// El resto va en el menú «Más», con el nombre completo.
+// El resto va en el menú ☰ de arriba a la izquierda, con el nombre completo.
 const MAS = [
   { id: 'libros', label: 'Libros IVA', description: 'Compras y ventas', Icon: BookOpen },
   { id: 'xml', label: 'XML / KuDE', description: 'Comprobantes e impresión', Icon: FileCode2 },
@@ -17,10 +17,38 @@ const MAS = [
   { id: 'marcaciones', label: 'Marcaciones', description: 'Horas a favor y en contra', Icon: Clock, requiresAssign: true },
 ];
 
-export default function MobileTabBar({ activeTab, canAssignClients, onChange }) {
+export default function MobileTabBar({ activeTab, onChange }) {
+  return (
+    <nav className="real-exec-mobile-tabs" aria-label="Secciones del período">
+      {TABS.map(({ id, label, Icon }) => {
+        const active = activeTab === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            className={active ? 'is-active' : ''}
+            aria-current={active ? 'page' : undefined}
+            onClick={() => onChange(id)}
+          >
+            <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// Botón ☰ de la barra superior (sólo en el teléfono) con el resto de las secciones.
+export function MobileMenuButton({ activeTab, canAssignClients, onChange }) {
   const [abierto, setAbierto] = useState(false);
   const mas = MAS.filter((item) => !item.requiresAssign || canAssignClients);
   const enMas = mas.some((item) => item.id === activeTab);
+
+  // Si se cambia de sección desde la barra inferior, el menú se cierra.
+  useEffect(() => {
+    setAbierto(false);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!abierto) return undefined;
@@ -38,60 +66,44 @@ export default function MobileTabBar({ activeTab, canAssignClients, onChange }) 
 
   return (
     <>
+      <button
+        type="button"
+        className={`real-exec-menu-button${enMas || abierto ? ' is-active' : ''}`}
+        aria-label="Más secciones"
+        title="Más secciones"
+        aria-expanded={abierto}
+        aria-controls="menu-mas"
+        aria-haspopup="menu"
+        onClick={() => setAbierto((v) => !v)}
+      >
+        {abierto ? <X size={19} /> : <Menu size={19} />}
+      </button>
       {abierto && (
-        <div className="real-exec-mobile-mas-fondo" onClick={() => setAbierto(false)} aria-hidden="true" />
+        <>
+          <div className="real-exec-mobile-mas-fondo" onClick={() => setAbierto(false)} aria-hidden="true" />
+          <div className="real-exec-mobile-mas" id="menu-mas" role="menu" aria-label="Más secciones">
+            {mas.map(({ id, label, description, Icon }) => {
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="menuitem"
+                  className={active ? 'is-active' : ''}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => elegir(id)}
+                >
+                  <Icon size={20} strokeWidth={active ? 2.4 : 1.9} />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{description}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
-      {abierto && (
-        <div className="real-exec-mobile-mas" id="menu-mas" role="menu" aria-label="Más secciones">
-          {mas.map(({ id, label, description, Icon }) => {
-            const active = activeTab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitem"
-                className={active ? 'is-active' : ''}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => elegir(id)}
-              >
-                <Icon size={20} strokeWidth={active ? 2.4 : 1.9} />
-                <span>
-                  <strong>{label}</strong>
-                  <small>{description}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      <nav className="real-exec-mobile-tabs" aria-label="Secciones del período">
-        {TABS.map(({ id, label, Icon }) => {
-          const active = activeTab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              className={active ? 'is-active' : ''}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => elegir(id)}
-            >
-              <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
-              <span>{label}</span>
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className={enMas || abierto ? 'is-active' : ''}
-          aria-expanded={abierto}
-          aria-controls="menu-mas"
-          aria-haspopup="menu"
-          onClick={() => setAbierto((v) => !v)}
-        >
-          {abierto ? <X size={21} strokeWidth={2.4} /> : <Menu size={21} strokeWidth={enMas ? 2.4 : 1.9} />}
-          <span>Más</span>
-        </button>
-      </nav>
     </>
   );
 }
