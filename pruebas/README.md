@@ -45,7 +45,7 @@ original.
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
 | CAMBIO-13 | Mantenimiento (PR #4): cambio del token sin cortes (acepta API_TOKEN y API_TOKEN_ANTERIOR), APK 1.1, PENDIENTES al día | En prueba | No |
-| CAMBIO-14 | Aviso diario de vencimientos al grupo contable por Whaticket (PR #5, `AppsScript-AvisoDiario.gs`) | En prueba | No |
+| CAMBIO-14 | Aviso diario de vencimientos al grupo contable por Whaticket (PR #5, `AppsScript-AvisoDiario.gs`). Mensaje corto: cantidades por encargado, sólo se nombran los que tienen monto a pagar | En prueba | No |
 | CAMBIO-15 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
 | CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
 
