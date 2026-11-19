@@ -295,10 +295,20 @@ function fillMergedValues(range) {
 }
 
 // ── TOKEN GENERAL DE LA API ─────────────────────────────────────────────
+// Rotación sin cortar el servicio: mientras exista API_TOKEN_ANTERIOR se
+// aceptan las dos claves (la app web y el APK viejo siguen funcionando hasta
+// que se actualicen). Al terminar la rotación, se borra API_TOKEN_ANTERIOR.
 function isAuthorized(token) {
-  const validToken = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
-  if (!validToken) return false;
-  return constantTimeEquals(String(token || ''), validToken);
+  const props = PropertiesService.getScriptProperties();
+  const recibido = String(token || '');
+  const validos = [props.getProperty('API_TOKEN'), props.getProperty('API_TOKEN_ANTERIOR')]
+    .filter(function (t) { return t && String(t).trim(); });
+  let ok = false;
+  validos.forEach(function (t) {
+    // sin cortar el bucle: el tiempo no depende de cuál coincide
+    if (constantTimeEquals(recibido, String(t))) ok = true;
+  });
+  return ok;
 }
 
 function unauthorizedResponse() {
