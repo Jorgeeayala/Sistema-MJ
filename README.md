@@ -169,6 +169,30 @@ console.anthropic.com → Limits conviene fijar un tope mensual. Con
 `claude-haiku-5-5` una consulta típica cuesta alrededor de US$ 0,003; la hoja
 `Agente Uso` muestra el costo estimado de cada una.
 
+### Aviso diario de vencimientos al grupo contable
+
+Cada mañana el grupo de WhatsApp del equipo recibe (por Whaticket) un resumen:
+lo que vence hoy y hasta el día del próximo aviso, con los pendientes por
+encargado y el monto a pagar de cada cliente, y los vencidos sin presentar del
+período. Usa la hoja mensual de la planilla y las liquidaciones de IVA, con el
+mismo cálculo de fechas que la app. Si Whaticket no puede enviar (por ejemplo,
+nadie escribió en el grupo en 7 días), el aviso llega por correo.
+
+Instalación (archivo `AppsScript-AvisoDiario.gs`, necesita `Whaticket`, `IVA` y `Código`):
+
+1. Crear el archivo `AvisoDiario` en el Apps Script y pegar el contenido.
+2. Ejecutar `probarAvisoDiario`: muestra en el registro el mensaje de hoy sin enviarlo.
+3. Ejecutar `instalarAvisoDiario`: queda programado todos los días.
+
+| Propiedad | Para qué |
+|---|---|
+| `AVISO_DIARIO_HORA` | Hora del envío, 0 a 23 (por defecto 7, hora de Paraguay). |
+| `AVISO_DIARIO_DIAS` | `1-6` lunes a sábado (por defecto), `1-5` o `0-6`. |
+| `AVISO_DIARIO_EMAIL` | Correo de respaldo (por defecto, el del dueño del script). |
+
+`enviarAvisoDiarioAhora` lo manda en el momento; `desinstalarAvisoDiario` lo apaga.
+No hace falta publicar una nueva versión del Web App.
+
 ### Migrar los datos de la app de Netlify
 
 Si ya había liquidaciones cargadas en `vencimientos-iva`, se traen una sola
