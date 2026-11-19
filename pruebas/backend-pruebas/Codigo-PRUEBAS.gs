@@ -3600,6 +3600,61 @@ function handleComprobantesGuardar(body, sessionUser) {
   }
 }
 
+// Importación en bloque (p. ej. el «Detalle de comprobantes registrados» de
+// Marangatu). body: { ruc, cliente, comprobantes: [...] }. Los que ya están
+// (mismo tipo, operación, número, timbrado y RUC) se saltean.
+function cpClaveDup_(x) {
+  return [x.op, x.tipo, x.numero, x.timbrado || '', String(x.ruc || '').replace(/\D/g, '')].join('|');
+}
+function handleComprobantesImportar(body, sessionUser) {
+  const ruc = cpRuc_(body.ruc);
+  if (!ruc) return errorResponse('Elegí el cliente', 'COMPROBANTES_DATOS');
+  const entrada = Array.isArray(body.comprobantes) ? body.comprobantes : [];
+  if (!entrada.length) return errorResponse('No hay comprobantes para importar', 'COMPROBANTE_VACIO');
+  if (entrada.length > COMPROBANTES_MAX_MES) return errorResponse('Son demasiados comprobantes para una sola importación (máximo ' + COMPROBANTES_MAX_MES + ')', 'COMPROBANTES_LLENO');
+  const porPeriodo = {};
+  let invalidos = 0;
+  entrada.forEach(function (raw) {
+    const c = cpNormalizar_(raw, sessionUser);
+    c.id = 'cp-' + Utilities.getUuid(); // siempre nuevos
+    if (!c.fecha || c.tipo === 'recibo' || !(c.g10 || c.g5 || c.ex)) { invalidos++; return; }
+    const p = c.fecha.slice(0, 7);
+    (porPeriodo[p] = porPeriodo[p] || []).push(c);
+  });
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return errorResponse('El registro está ocupado, intentá de nuevo', 'COMPROBANTES_LOCK_TIMEOUT');
+  try {
+    const sheet = ensureComprobantesSheet();
+    let agregados = 0;
+    let repetidos = 0;
+    const meses = [];
+    Object.keys(porPeriodo).sort().forEach(function (periodo) {
+      const reg = cpBuscar_(cpLeerIndice_(sheet), ruc, periodo);
+      const lista = reg ? cpLeerLista_(sheet, reg.fila) : [];
+      const vistos = {};
+      lista.forEach(function (x) { vistos[cpClaveDup_(x)] = true; });
+      let nuevos = 0;
+      porPeriodo[periodo].forEach(function (c) {
+        const k = cpClaveDup_(c);
+        if (vistos[k]) { repetidos++; return; }
+        if (lista.length >= COMPROBANTES_MAX_MES) { invalidos++; return; }
+        vistos[k] = true;
+        lista.push(c);
+        nuevos++;
+      });
+      if (nuevos) {
+        cpEscribir_(sheet, reg, ruc, cpTexto_(body.cliente, 200), periodo, lista, sessionUser);
+        agregados += nuevos;
+      }
+      meses.push({ periodo: periodo, agregados: nuevos });
+    });
+    return jsonResponse({ ok: true, agregados: agregados, repetidos: repetidos, invalidos: invalidos, meses: meses });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function handleComprobantesEliminar(body, sessionUser) {
   const ruc = cpRuc_(body.ruc);
   const periodo = cpTexto_(body.periodo, 10);
@@ -3625,7 +3680,8 @@ function handleComprobantesAction(action, body, sessionUser, sessionRole) {
     comprobantesListar: [function () { return handleComprobantesListar(body); }, 'COMPROBANTES_LISTAR_ERROR'],
     comprobantesLeer: [function () { return handleComprobantesLeer(body); }, 'COMPROBANTES_LEER_ERROR'],
     comprobantesGuardar: [function () { return handleComprobantesGuardar(body, sessionUser); }, 'COMPROBANTES_GUARDAR_ERROR'],
-    comprobantesEliminar: [function () { return handleComprobantesEliminar(body, sessionUser); }, 'COMPROBANTES_ELIMINAR_ERROR']
+    comprobantesEliminar: [function () { return handleComprobantesEliminar(body, sessionUser); }, 'COMPROBANTES_ELIMINAR_ERROR'],
+    comprobantesImportar: [function () { return handleComprobantesImportar(body, sessionUser); }, 'COMPROBANTES_IMPORTAR_ERROR']
   };
   const route = Object.prototype.hasOwnProperty.call(routes, action) ? routes[action] : null;
   if (!route) return null;

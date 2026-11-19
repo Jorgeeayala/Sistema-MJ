@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Download, FilePlus2, FileText, Pencil, Printer, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Copy, Download, FilePlus2, FileText, Pencil, Printer, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import { api } from '../api';
 import { useClientsData, useClientsMeta } from '../context/ClientsContext';
 import { ClienteSelect } from '../comun/ClienteSelect';
@@ -7,6 +7,7 @@ import { clientesDeFilas, sinAcentos } from '../comun/clientes';
 import { MESES, firma, gs, periodoFiscalDeHoja } from '../iva/ivaCore.js';
 import { getIvaConfig } from '../iva/ivaConfigCache';
 import FormComprobante from './FormComprobante';
+import ImportarMarangatu from './ImportarMarangatu';
 import { EMISORES, FORMAS_PAGO, IMPUESTOS, TIPOS, calcular, comprobanteVacio, esRecibo, normalizar, periodoDe, reciboEmitido, totales } from './comprobantesCore.js';
 import { descargarReciboPdf } from './reciboPdf';
 import '../libros/libros.css';
@@ -58,6 +59,7 @@ export default function ComprobantesModule({ withDesktopSidebar = false }) {
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState('');
   const [borrar, setBorrar] = useState(null);
+  const [importando, setImportando] = useState(false);
   const [aviso, setAviso] = useState('');
   const [contrapartesVer, setContrapartesVer] = useState(0);
   const avisoTimer = useRef(null);
@@ -252,9 +254,14 @@ export default function ComprobantesModule({ withDesktopSidebar = false }) {
           <h1>Registro de comprobantes</h1>
           <p>Facturas, notas de crédito y recibos de cada cliente, por mes. Lo imputado a IVA pasa al Formulario 120.</p>
         </div>
-        <button type="button" className="rx-btn rx-btn-primary cp-nuevo" onClick={() => abrirNuevo()} disabled={!cliente || cargando}>
-          <FilePlus2 size={16} aria-hidden="true" /> Nuevo comprobante
-        </button>
+        <div className="cp-head-acciones">
+          <button type="button" className="rx-btn rx-btn-outline cp-importar" onClick={() => setImportando(true)}>
+            <Upload size={16} aria-hidden="true" /> Importar de Marangatu
+          </button>
+          <button type="button" className="rx-btn rx-btn-primary cp-nuevo" onClick={() => abrirNuevo()} disabled={!cliente || cargando}>
+            <FilePlus2 size={16} aria-hidden="true" /> Nuevo comprobante
+          </button>
+        </div>
       </header>
 
       {indice.error && <div className="lb-error" role="alert"><AlertTriangle size={16} aria-hidden="true" /> {indice.error}</div>}
@@ -433,6 +440,21 @@ export default function ComprobantesModule({ withDesktopSidebar = false }) {
           error={errorForm}
           onGuardar={guardar}
           onCerrar={() => setForm(null)}
+        />
+      )}
+      {importando && (
+        <ImportarMarangatu
+          clientes={clientes}
+          rucInicial={ruc}
+          onCerrar={() => setImportando(false)}
+          onImportado={({ ruc: r, periodo: p, agregados, repetidos }) => {
+            setImportando(false);
+            cargarIndice();
+            if (r === ruc && p === periodo) cargarMes(r, p);
+            setRuc(r);
+            if (p) setPeriodo(p);
+            mostrarAviso(`Importados ${agregados}${repetidos ? ` · ${repetidos} ya estaban` : ''}`);
+          }}
         />
       )}
       {aviso && <div className="lb-toast" role="status">{aviso}</div>}

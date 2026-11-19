@@ -624,6 +624,7 @@ export const api = {
     },
     guardar: (datos) => request({ action: 'comprobantesGuardar', ...datos }),
     eliminar: (ruc, periodo, id) => request({ action: 'comprobantesEliminar', ruc, periodo, id }),
+    importar: (ruc, cliente, comprobantes) => request({ action: 'comprobantesImportar', ruc, cliente, comprobantes }),
   },
   libros: {
     listar: async (ruc = '') => {

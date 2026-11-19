@@ -468,3 +468,20 @@
     order: -1;
   }
 }
+
+.cp-head-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .cp-head-acciones {
+    width: 100%;
+    flex-direction: column-reverse;
+  }
+  .cp-importar {
+    width: 100%;
+    justify-content: center;
+  }
+}

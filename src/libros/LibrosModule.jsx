@@ -6,6 +6,7 @@ import { MESES, gs, splitRuc } from '../iva/ivaCore.js';
 import { ClienteSelect } from '../comun/ClienteSelect';
 import { findDvColumn, sinAcentos } from '../comun/clientes';
 import { COLUMNAS, datosAComprobantes, leerArchivoLibro, libroADatos, sugerirCliente } from './leerLibroSiga.js';
+import { registroALibro } from '../comprobantes/leerRegistroMarangatu.js';
 import './libros.css';
 
 // Libros IVA: compras y ventas exportados de SIGA, uno por cliente + mes.
@@ -50,7 +51,8 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
       if (l.anio) setAnio(l.anio);
       if (l.tipo) setTipo(l.tipo);
       if (!preset?.ruc) {
-        const s = sugerirCliente(l.razonSocial, clientes);
+        const porRuc = l.rucInformante ? clientes.find((c) => c.ruc === l.rucInformante) : null;
+        const s = porRuc || sugerirCliente(l.razonSocial, clientes);
         setRuc(s ? s.ruc : '');
       }
       setPaso({ estado: 'revisar', error: '' });
@@ -102,7 +104,7 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
               >
                 <FileSpreadsheet size={34} aria-hidden="true" />
                 <strong>{paso.estado === 'leyendo' ? 'Leyendo el archivo…' : 'Elegí o arrastrá el libro exportado'}</strong>
-                <span>Libro IVA Compra o Venta de SIGA, en Excel (.xlsx, .xls) o CSV.</span>
+                <span>Libro IVA Compra o Venta de SIGA, en Excel (.xlsx, .xls) o CSV, o el «Detalle de comprobantes registrados» de Marangatu.</span>
                 <input
                   ref={inputRef}
                   type="file"
@@ -111,7 +113,7 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
                   disabled={paso.estado === 'leyendo'}
                 />
               </label>
-              <p className="lb-ayuda">En SIGA: <b>Libro Iva Compra/Venta</b> → elegí el mes → marcá <b>Exportar Consulta</b> → <b>Confirmar</b>.</p>
+              <p className="lb-ayuda">En SIGA: <b>Libro Iva Compra/Venta</b> → elegí el mes → marcá <b>Exportar Consulta</b> → <b>Confirmar</b>. En Marangatu: el Excel del detalle de comprobantes registrados.</p>
             </>
           )}
 
@@ -133,7 +135,10 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
               {libro.coinciden === false && (
                 <div className="lb-error"><AlertTriangle size={16} aria-hidden="true" /> Los totales leídos no coinciden con los del archivo en: {libro.diferencias.map((k) => COLUMNAS[k].titulo).join(', ')}. Revisá el archivo antes de importarlo.</div>
               )}
-              {libro.coinciden === null && (
+              {libro.registro && (
+                <div className="lb-ok"><CheckCircle2 size={16} aria-hidden="true" /> Detalle de comprobantes registrados de Marangatu: {libro.registro.ventas} de ventas y {libro.registro.compras} de compras. Se importa el libro de <b>{libro.tipo === 'compras' ? 'Compras' : 'Ventas'}</b>{(libro.tipo === 'compras' ? libro.registro.ventas : libro.registro.compras) ? '; para el otro, cambiá «Libro» y volvé a importar' : ''}.{libro.otrosMeses ? ` Ojo: el archivo trae ${libro.otrosMeses} comprobantes de otros meses que no entran en este libro (en Comprobantes → Importar de Marangatu se cargan todos).` : ''}</div>
+              )}
+              {libro.coinciden === null && !libro.registro && (
                 <div className="lb-aviso"><AlertTriangle size={16} aria-hidden="true" /> El archivo no trae la fila TOTAL: no se pudieron comparar los totales.</div>
               )}
 
@@ -148,7 +153,12 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
                 </div>
                 <div className="lb-campo">
                   <label htmlFor="lb-imp-tipo">Libro</label>
-                  <select id="lb-imp-tipo" value={tipo} onChange={(e) => { setTipo(e.target.value); setExistente(null); }}>
+                  <select id="lb-imp-tipo" value={tipo} onChange={(e) => {
+                    const t = e.target.value;
+                    setTipo(t);
+                    setExistente(null);
+                    if (libro.registro && t) setLibro({ ...registroALibro(libro.registro, t), registro: libro.registro });
+                  }}>
                     <option value="">Elegir…</option>
                     <option value="compras">Compras</option>
                     <option value="ventas">Ventas</option>

@@ -521,6 +521,24 @@ export async function handle(body) {
       cpMeta.set(k, { cliente: String(body.cliente || (cpMeta.get(k) || {}).cliente || ''), modificadoPor: session.user, modificadoEl: new Date().toISOString() });
       return { ok: true, comprobante: c, periodo, cantidad: lista.length };
     }
+    case 'comprobantesImportar': {
+      const ruc = String(body.ruc || '').replace(/\D/g, '');
+      if (!ruc) return { ok: false, code: 'COMPROBANTES_DATOS', error: 'Elegí el cliente' };
+      const clave = (x) => [x.op, x.tipo, x.numero, x.timbrado || '', String(x.ruc || '').replace(/\D/g, '')].join('|');
+      let agregados = 0, repetidos = 0, invalidos = 0;
+      const meses = {};
+      for (const raw of body.comprobantes || []) {
+        const c = { ...raw, id: `cp-${Math.random().toString(36).slice(2)}`, cargadoPor: session.user, cargadoEl: new Date().toISOString() };
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(c.fecha || '') || !(Number(c.g10) || Number(c.g5) || Number(c.ex))) { invalidos++; continue; }
+        const k = `${ruc}|${c.fecha.slice(0, 7)}`;
+        const lista = comprobantes.get(k) || [];
+        if (lista.some((x) => clave(x) === clave(c))) { repetidos++; continue; }
+        lista.push(c); comprobantes.set(k, lista); agregados++;
+        meses[c.fecha.slice(0, 7)] = (meses[c.fecha.slice(0, 7)] || 0) + 1;
+        cpMeta.set(k, { cliente: String(body.cliente || ''), modificadoPor: session.user, modificadoEl: new Date().toISOString() });
+      }
+      return { ok: true, agregados, repetidos, invalidos, meses: Object.entries(meses).map(([periodo, n]) => ({ periodo, agregados: n })) };
+    }
     case 'comprobantesEliminar': {
       const ruc = String(body.ruc || '').replace(/\D/g, '');
       const k = `${ruc}|${body.periodo}`;

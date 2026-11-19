@@ -13,6 +13,7 @@
 // que SIGA agregue, quite u ordene distinto alguna columna.
 
 import { MESES } from '../iva/ivaCore.js';
+import { esRegistroMarangatu, interpretarRegistroMarangatu, registroALibro } from '../comprobantes/leerRegistroMarangatu.js';
 
 // Columnas conocidas: clave → título para mostrar y si es un importe.
 export const COLUMNAS = {
@@ -190,6 +191,14 @@ export async function leerArchivoLibro(file) {
   for (const nombre of wb.SheetNames) {
     const filas = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: null, blankrows: true });
     try {
+      // «Detalle de comprobantes registrados» de Marangatu (RG 90): puede
+      // traer ventas y compras juntas; se arma el libro del tipo con más
+      // comprobantes y el importador permite cambiar al otro.
+      if (esRegistroMarangatu(filas)) {
+        const reg = interpretarRegistroMarangatu(filas.filter(Boolean));
+        const tipo = reg.compras > reg.ventas ? 'compras' : 'ventas';
+        return { ...registroALibro(reg, tipo), registro: reg };
+      }
       return interpretarLibro(filas, file.name);
     } catch (e) {
       ultimoError = e;

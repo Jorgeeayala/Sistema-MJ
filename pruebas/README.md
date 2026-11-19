@@ -49,6 +49,7 @@ original.
 | CAMBIO-15 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
 | CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
 | CAMBIO-17 | Recibos de dinero en «Comprobantes»: emitidos por el cliente o por el estudio (honorarios), numerados solos y en PDF A4 original/duplicado con monto en letras; y recibidos por el cliente | En prueba | No |
+| CAMBIO-18 | Importar el «Detalle de comprobantes registrados» de Marangatu (RG 90): al registro de Comprobantes (todos, sin duplicar) y en Libros IVA | En prueba | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -439,3 +440,21 @@ Es la primera etapa del plan para cargar distintos tipos de documento. Cada comp
   - El Excel incluye los recibos.
   - Los recibos **no** cuentan en los totales de ventas y compras ni pasan al Formulario 120.
 - **Para que funcione con los datos reales:** pegar el `AppsScript-Comprobantes.gs` nuevo y publicar una nueva versión.
+
+### CAMBIO-18 · Importar el detalle de comprobantes registrados de Marangatu
+
+- **El formato:** es el Excel `DetalleComprobantesRegistrados_….xlsx` que baja de Marangatu (registro de comprobantes, RG 90). Trae una fila por comprobante con informante, informado, tipo de registro, tipo de comprobante, fecha, timbrado, número, CDC, montos gravados con IVA incluido, IVA, exento, total, imputación y comprobante asociado. Las columnas se reconocen por su título, no por su posición.
+- **Comprobantes → «Importar de Marangatu»:**
+  - Lee el archivo y muestra cuántos comprobantes hay de ventas y de compras, y de qué meses.
+  - Compara el IVA calculado con el que trae el archivo.
+  - Propone el cliente por el RUC del informante. Si ese RUC no está en la lista, se elige a mano; si no coincide con el cliente elegido, avisa.
+  - Muestra una vista previa antes de importar.
+  - Importa **todos** los comprobantes, de cualquier mes, cada uno en su mes, con su timbrado, el RUC del informado con el DV calculado, la condición y la imputación IVA/IRE/IRP.
+  - Las notas de crédito pasan como NC, con el comprobante asociado. Los demás tipos (autofactura, boleta, ticket…) se cargan como factura, con el tipo original en la nota. El CDC también queda en la nota.
+  - Si se vuelve a importar el mismo archivo, **no se duplica**: avisa «N ya estaban».
+- **Libros IVA → Importar libro:** además de SIGA, acepta este archivo.
+  - Arma el libro de ventas o de compras del mes. Si el archivo trae los dos, se elige con «Libro» y se importa otra vez.
+  - Propone el cliente por el RUC del informante.
+  - Avisa si el archivo trae comprobantes de otros meses que no entran en ese libro.
+- **Backend:** acción nueva `comprobantesImportar`, que guarda en bloque, un mes por escritura, con bloqueo. Hay que pegar el `AppsScript-Comprobantes.gs` nuevo y publicar una nueva versión.
+- **Prueba hecha:** con el archivo de ejemplo, 4 facturas de venta de octubre 2026. El IVA calculado coincide con el de Marangatu (Gs. 2.706.400) y el DV de los 4 RUC da bien. Ese archivo **no** se sube al repositorio.
