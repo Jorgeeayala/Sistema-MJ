@@ -126,6 +126,20 @@ const avisos = [];
 const sugerencias = [];
 // Libros IVA (mismo contrato que AppsScript-Libros.gs).
 const libros = [];
+// Registro de comprobantes (mismo contrato que AppsScript-Comprobantes.gs).
+// clave `${ruc}|${periodo}` → lista de comprobantes.
+const comprobantes = new Map();
+const cpTotales = (lista) => {
+  const t = { ventas: 0, compras: 0, ivaVentas: 0, ivaCompras: 0 };
+  for (const c of lista) {
+    const f = c.moneda === 'USD' ? Number(c.cambio) || 0 : 1;
+    const g10 = Math.round((Number(c.g10) || 0) * f), g5 = Math.round((Number(c.g5) || 0) * f), ex = Math.round((Number(c.ex) || 0) * f);
+    const s = c.tipo === 'nc' ? -1 : 1, iva = Math.round(g10 / 11) + Math.round(g5 / 21);
+    if (c.op === 'compra') { t.compras += s * (g10 + g5 + ex); t.ivaCompras += s * iva; } else { t.ventas += s * (g10 + g5 + ex); t.ivaVentas += s * iva; }
+  }
+  return t;
+};
+const cpMeta = new Map(); // clave → { cliente, modificadoPor, modificadoEl }
 // Preferencias por usuario (AppsScript-Preferencias.gs).
 const preferencias = new Map();
 const AMBIENTES_OK = ['ninguna', 'automatica', 'navidad', 'anio-nuevo', 'semana-santa', 'independencia', 'san-juan', 'verano', 'otono', 'invierno', 'primavera'];
@@ -447,6 +461,58 @@ export async function handle(body) {
       if (body.animacion !== undefined) p.animacion = body.animacion === true;
       preferencias.set(session.user, p);
       return { ok: true, ...p };
+    }
+    case 'comprobantesListar': {
+      const ruc = String(body.ruc || '').replace(/\D/g, '');
+      const registros = [...comprobantes.entries()].map(([k, lista]) => {
+        const [r, periodo] = k.split('|');
+        return { id: 'cm-' + k, ruc: r, periodo, cantidad: lista.length, totales: cpTotales(lista), ...(cpMeta.get(k) || {}) };
+      }).filter((x) => !ruc || x.ruc === ruc);
+      return { ok: true, registros };
+    }
+    case 'comprobantesLeer': {
+      const ruc = String(body.ruc || '').replace(/\D/g, '');
+      const k = `${ruc}|${body.periodo}`;
+      const lista = comprobantes.get(k) || [];
+      return { ok: true, registro: { ruc, periodo: body.periodo, cantidad: lista.length, ...(cpMeta.get(k) || {}), comprobantes: JSON.parse(JSON.stringify(lista)) } };
+    }
+    case 'comprobantesGuardar': {
+      const ruc = String(body.ruc || '').replace(/\D/g, '');
+      const c = { ...(body.comprobante || {}) };
+      if (!ruc) return { ok: false, code: 'COMPROBANTES_DATOS', error: 'Elegí el cliente' };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(c.fecha || '')) return { ok: false, code: 'COMPROBANTE_FECHA', error: 'Falta la fecha del comprobante' };
+      if (!(Number(c.g10) || Number(c.g5) || Number(c.ex))) return { ok: false, code: 'COMPROBANTE_VACIO', error: 'El comprobante no tiene montos' };
+      c.id = c.id || `cp-${Math.random().toString(36).slice(2)}`;
+      c.timbrado = String(c.timbrado || '').replace(/\D/g, '').slice(0, 8);
+      const periodo = c.fecha.slice(0, 7);
+      const k = `${ruc}|${periodo}`;
+      const lista = comprobantes.get(k) || [];
+      const sinDv = (r) => String(r || '').replace(/\D/g, '');
+      const dup = lista.find((x) => x.id !== c.id && x.op === c.op && x.tipo === c.tipo && c.numero && x.numero === c.numero && (x.timbrado || '') === c.timbrado && sinDv(x.ruc) === sinDv(c.ruc));
+      if (dup) return { ok: false, code: 'COMPROBANTE_DUPLICADO', error: 'Ese comprobante ya está cargado en ese mes', existente: dup };
+      const i = lista.findIndex((x) => x.id === c.id);
+      if (i >= 0) { c.cargadoPor = lista[i].cargadoPor; c.cargadoEl = lista[i].cargadoEl; c.modificadoPor = session.user; lista[i] = c; }
+      else { c.cargadoPor = session.user; c.cargadoEl = new Date().toISOString(); lista.push(c); }
+      const ant = String(body.periodoAnterior || '');
+      if (ant && ant !== periodo) {
+        const ka = `${ruc}|${ant}`;
+        const orig = (comprobantes.get(ka) || []).find((x) => x.id === c.id);
+        if (orig) { c.cargadoPor = orig.cargadoPor; c.cargadoEl = orig.cargadoEl; c.modificadoPor = session.user; }
+        const resto = (comprobantes.get(ka) || []).filter((x) => x.id !== c.id);
+        if (resto.length) comprobantes.set(ka, resto); else comprobantes.delete(ka);
+      }
+      comprobantes.set(k, lista);
+      cpMeta.set(k, { cliente: String(body.cliente || (cpMeta.get(k) || {}).cliente || ''), modificadoPor: session.user, modificadoEl: new Date().toISOString() });
+      return { ok: true, comprobante: c, periodo, cantidad: lista.length };
+    }
+    case 'comprobantesEliminar': {
+      const ruc = String(body.ruc || '').replace(/\D/g, '');
+      const k = `${ruc}|${body.periodo}`;
+      const lista = comprobantes.get(k) || [];
+      const resto = lista.filter((x) => x.id !== body.id);
+      if (resto.length === lista.length) return { ok: false, code: 'COMPROBANTE_NO_EXISTE', error: 'No se encontró ese comprobante' };
+      if (resto.length) comprobantes.set(k, resto); else comprobantes.delete(k);
+      return { ok: true, cantidad: resto.length };
     }
     case 'librosListar': {
       const ruc = String(body.ruc || '').replace(/\D/g, '');

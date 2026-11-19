@@ -1881,6 +1881,24 @@
     font-weight: 700;
   }
 
+  .real-exec-mobile-tabs button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Con 6 o más pestañas (administradores) se achican para que entren. */
+  .real-exec-mobile-tabs:has(> button:nth-child(6)) {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+  .real-exec-mobile-tabs:has(> button:nth-child(6)) button {
+    padding: 4px 1px;
+    font-size: 11px;
+    letter-spacing: -0.01em;
+  }
+
   .real-exec-mobile-tabs button.is-active {
     color: var(--rx-brand-dark);
     background: var(--rx-brand-soft);

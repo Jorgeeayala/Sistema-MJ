@@ -49,9 +49,10 @@ export function construirPasosGuia({ canAssign, isSuper, conAsistente = false })
         <>
           <p>Desde acá te movés entre las partes del sistema:</p>
           <ul>
-            <li><strong>Estadísticas</strong>: cómo viene el mes.</li>
+            <li><strong>Estadísticas</strong> («Métricas» en el celular): cómo viene el mes.</li>
             <li><strong>Clientes</strong>: la cartera del período y la ficha de cada uno.</li>
             <li><strong>Vencimientos IVA</strong> («IVA» en el celular): liquidaciones y fichas para el cliente.</li>
+            <li><strong>Comprobantes</strong> («Comprob.» en el celular): facturas y notas de crédito de cada cliente, con timbrado.</li>
             <li><strong>Libros IVA</strong> («Libros» en el celular): compras y ventas importados de SIGA.</li>
             {canAssign && <li><strong>Asignar clientes</strong>: el reparto entre el equipo.</li>}
             {canAssign && <li><strong>Marcaciones</strong> («Horas» en el celular): horas a favor y en contra del personal.</li>}
@@ -327,6 +328,28 @@ export function construirPasosGuia({ canAssign, isSuper, conAsistente = false })
       ),
     },
   ];
+
+  // ── Comprobantes ────────────────────────────────────────────────────
+  pasos.push({
+    id: 'comprobantes',
+    emoji: '🧾',
+    title: 'Comprobantes: el registro de cada cliente',
+    tab: 'comprobantes',
+    target: '.cp-nuevo',
+    body: (
+      <>
+        <p>
+          Acá se cargan las <strong>facturas y notas de crédito</strong> de cada cliente, de ventas y de compras, una sola vez.
+        </p>
+        <ul>
+          <li>Elegí el cliente y el mes, y tocá <strong>Nuevo comprobante</strong>: fecha, número, <strong>timbrado</strong>, RUC (el dígito verificador se completa solo), montos con IVA incluido y a qué impuesto se imputa.</li>
+          <li><strong>Guardar y cargar otro</strong> deja la fecha y el tipo listos para el siguiente.</li>
+          <li>Lo imputado a IVA se pasa al Formulario 120 desde <strong>Vencimientos IVA</strong> → el cliente → <strong>Traer al formulario</strong>.</li>
+        </ul>
+        {tip(<>Si cargás una fecha de otro mes, el comprobante se guarda en ese mes.</>)}
+      </>
+    ),
+  });
 
   // ── Libros IVA ──────────────────────────────────────────────────────
   pasos.push({

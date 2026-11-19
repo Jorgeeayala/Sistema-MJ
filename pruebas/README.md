@@ -45,6 +45,7 @@ original.
 | CAMBIO-8 | Enlace «Sitio web del estudio» (menú lateral, Configuración, ingreso), editable por un administrador | En prueba | No |
 | CAMBIO-9 | Sección «Libros IVA»: importar los libros de compras y ventas de SIGA (Excel/CSV) por cliente y mes, y consultarlos | En prueba | No |
 | CAMBIO-13 | Campo «Timbrado» en la carga de comprobantes del IVA (y columna en el PDF del libro) | En prueba | No |
+| CAMBIO-14 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -376,3 +377,38 @@ node pruebas/generar-extension.mjs https://sistema-mj.vercel.app
 - El timbrado se guarda con el resto del detalle (campo `tb` en el JSON de la liquidación). No hace falta tocar el Apps Script.
 - El PDF «Libro de compras y ventas» suma la columna **Timbrado**, entre Comprobante y Cliente/Proveedor.
 - Archivos: `src/iva/IvaEditor.jsx`, `src/iva/ivaCore.js`, `src/iva/iva.css`.
+
+### CAMBIO-14 · Registro de comprobantes (etapa 1)
+
+Es la primera etapa del plan para cargar distintos tipos de documento. Cada comprobante se carga **una sola vez** por cliente, y cada impuesto lee de ahí lo que le corresponde.
+
+- **Sección «Comprobantes»:** está en el menú lateral; en el celular aparece como «Comprob.». Se elige el cliente y el mes, y se ven:
+  - el resumen del mes: ventas, compras e IVA imputado;
+  - filtros por Ventas y Compras, y búsqueda por nombre, RUC, número o timbrado;
+  - la tabla de comprobantes, que en el celular se muestra como tarjetas;
+  - descarga en Excel.
+- **Nuevo comprobante:**
+  - **Operación y tipo:** venta o compra; factura o nota de crédito. En las notas de crédito se indica la factura que corrigen.
+  - **Datos del documento:** fecha, condición, número (`1-1-123` se completa como `001-001-0000123`) y timbrado.
+  - **Contraparte:** RUC y nombre. Si se escribe el RUC sin DV, el dígito verificador se completa solo; si el DV no coincide, aparece un aviso. Los RUC ya usados se sugieren con su nombre.
+  - **Montos:** gravado 10%, gravado 5% y exento, con IVA incluido. El IVA y el total se calculan en el momento. Hay una opción para marcar el 5% agrícola.
+  - **Moneda:** guaraníes o dólares. En dólares se acepta coma decimal y se pide el tipo de cambio.
+  - **Imputación:** a IVA, IRE o IRP-RSP.
+  - **«Guardar y cargar otro»:** deja la fecha, la operación y el tipo listos para el siguiente.
+  - **Duplicados:** si ya hay un comprobante del mismo mes con el mismo número, timbrado y RUC, avisa y no lo guarda.
+  - **Fecha de otro mes:** el comprobante se guarda en ese mes y se avisa antes de guardar.
+- **IVA (Formulario 120):** en Vencimientos IVA → cliente aparece el aviso «N comprobantes imputados a IVA en el registro» con el botón **Traer al formulario**. Ese botón:
+  - carga las casillas con lo imputado a IVA, incluyendo fecha, número, timbrado y RUC para el libro;
+  - pide confirmar si ya había montos cargados, porque los reemplaza.
+- **Backend:** archivo nuevo `AppsScript-Comprobantes.gs`, que crea la hoja «Comprobantes» con una fila por cliente y mes.
+  - Cada alta, cambio o baja toca **un solo** comprobante, con bloqueo, así dos personas pueden cargar el mismo mes a la vez.
+  - Todos los usuarios pueden cargar, editar y borrar. Queda registrado quién cargó y quién modificó cada comprobante.
+- **Hay que pegar en Apps Script:** `AppsScript-Comprobantes.gs` (archivo nuevo) y el `AppsScript-Avisos.gs` actualizado. Después, publicar una nueva versión.
+- **Otros cambios:**
+  - El selector de cliente pasó a `src/comun/` y lo comparten Libros IVA y Comprobantes.
+  - `MoneyInput` está ahora en su propio archivo y acepta decimales.
+  - En la barra inferior del celular, «Estadísticas» se llama «Métricas» para que entren todas las pestañas.
+- **Próximas etapas:**
+  - 2 · Recibos de dinero, emitidos y recibidos.
+  - 3 · IRP: Formularios 515 y 516 con la misma vista que en Marangatu.
+  - 4 · Retenciones, autofacturas e importación RG 90.

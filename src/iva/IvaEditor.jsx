@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { api } from '../api';
 import { enviarContextoApp, enviarWhatsappExtension, mensajeDeError, sendIvaToMarangatu } from '../marangatu';
 import DescargaFormularios from './DescargaFormularios';
+import MoneyInput from './MoneyInput';
+import TraerDelRegistro from '../comprobantes/TraerDelRegistro';
 import { blobABase64, useIntegraciones } from '../agente/integraciones';
 import ChatWhaticket from './ChatWhaticket';
 import {
@@ -31,7 +33,6 @@ import {
   shiftPer,
   resumenHoja,
   textOn,
-  toNum,
   vencDe,
   diasRetraso,
   waChatUrl,
@@ -78,35 +79,6 @@ function readLibroPreference() {
 
 function emptyRow(iva = IVA_DEFAULT_NUEVO, f = '') {
   return { m: 0, iva, f, n: '', tb: '', t: '' };
-}
-
-// Monto en guaraníes con separador de miles mientras se escribe. El cursor
-// se conserva contando desde el final, como en la versión anterior.
-function MoneyInput({ value, onValue, className = '', ...rest }) {
-  const ref = useRef(null);
-  const fromEnd = useRef(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (fromEnd.current === null || !el || el !== document.activeElement) return;
-    const pos = Math.max(0, el.value.length - fromEnd.current);
-    el.setSelectionRange(pos, pos);
-    fromEnd.current = null;
-  });
-  return (
-    <input
-      ref={ref}
-      className={className}
-      inputMode="numeric"
-      placeholder="0"
-      value={value ? gs(value) : ''}
-      onChange={(e) => {
-        fromEnd.current = e.target.value.length - (e.target.selectionStart ?? e.target.value.length);
-        onValue(toNum(e.target.value));
-      }}
-      onFocus={(e) => e.target.select()}
-      {...rest}
-    />
-  );
 }
 
 export default function IvaEditor({
@@ -524,6 +496,21 @@ export default function IvaEditor({
             />
             <span>Cargar detalle de comprobantes (fecha, número, timbrado y cliente/proveedor) para el libro de ventas y compras</span>
           </label>
+
+          <TraerDelRegistro
+            ruc={cliente.ruc}
+            periodo={periodo}
+            hayMontos={LISTS.some((L) => getItems(draft, L.k).some((x) => x.m))}
+            onAplicar={(listas, n) => {
+              update((d) => {
+                const nd = { ...d };
+                LISTS.forEach((L) => { nd[L.k] = listas[L.k] || []; });
+                return normDraft(nd);
+              });
+              setLibroMode(true);
+              toast(`Se cargaron ${n} comprobantes del registro al formulario.`);
+            }}
+          />
 
           <div className="iva-rubro first">Saldos anteriores (información inicial del período)</div>
           <div className="iva-fields">

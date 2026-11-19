@@ -613,6 +613,18 @@ export const api = {
   // Libros IVA de compras y ventas importados de SIGA (AppsScript-Libros.gs).
   // guardar() con un libro ya cargado (mismo cliente + mes + tipo) falla con
   // code LIBRO_EXISTE y error.details.existente; se repite con reemplazar.
+  comprobantes: {
+    listar: async (ruc = '') => {
+      const data = await request({ action: 'comprobantesListar', ruc });
+      return Array.isArray(data.registros) ? data.registros : [];
+    },
+    leer: async (ruc, periodo) => {
+      const data = await request({ action: 'comprobantesLeer', ruc, periodo });
+      return data.registro;
+    },
+    guardar: (datos) => request({ action: 'comprobantesGuardar', ...datos }),
+    eliminar: (ruc, periodo, id) => request({ action: 'comprobantesEliminar', ruc, periodo, id }),
+  },
   libros: {
     listar: async (ruc = '') => {
       const data = await request({ action: 'librosListar', ruc });

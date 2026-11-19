@@ -3,7 +3,8 @@ import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Download, FileSpreads
 import { api } from '../api';
 import { useClientsData, useClientsMeta } from '../context/ClientsContext';
 import { MESES, gs, splitRuc } from '../iva/ivaCore.js';
-import { compactHeader } from '../utils';
+import { ClienteSelect } from '../comun/ClienteSelect';
+import { findDvColumn, sinAcentos } from '../comun/clientes';
 import { COLUMNAS, datosAComprobantes, leerArchivoLibro, libroADatos, sugerirCliente } from './leerLibroSiga.js';
 import './libros.css';
 
@@ -21,78 +22,8 @@ const fechaHora = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
-const sinAcentos = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 // Importes a mostrar en el resumen (los que tenga el libro).
 const RESUMEN = ['grav10', 'iva10', 'grav5', 'iva5', 'exentas', 'total'];
-
-function findDvColumn(headers) {
-  return headers.find((h) => ['dv', 'digitoverificador', 'digito'].includes(compactHeader(h))) || null;
-}
-
-// ── Selector de cliente con búsqueda ─────────────────────────────────────
-function ClienteSelect({ clientes, valor, onChange, id, placeholder = 'Buscar cliente por nombre o RUC…' }) {
-  const [texto, setTexto] = useState('');
-  const [abierto, setAbierto] = useState(false);
-  const caja = useRef(null);
-  const elegido = clientes.find((c) => c.ruc === valor) || null;
-  const q = sinAcentos(texto.trim());
-  const lista = useMemo(
-    () => clientes.filter((c) => !q || sinAcentos(c.nombre).includes(q) || c.ruc.includes(q.replace(/\D/g, '') || '¬')).slice(0, 60),
-    [clientes, q]
-  );
-  useEffect(() => {
-    if (!abierto) return undefined;
-    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
-    document.addEventListener('mousedown', fuera);
-    return () => document.removeEventListener('mousedown', fuera);
-  }, [abierto]);
-  return (
-    <div className="lb-cliente" ref={caja}>
-      <div className="lb-cliente-input">
-        <Search size={15} aria-hidden="true" />
-        <input
-          id={id}
-          value={abierto ? texto : elegido ? `${elegido.nombre} · ${elegido.ruc}` : texto}
-          placeholder={placeholder}
-          onFocus={() => { setAbierto(true); setTexto(''); }}
-          onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && lista[0]) { onChange(lista[0].ruc); setAbierto(false); e.currentTarget.blur(); }
-            if (e.key === 'Escape') { setAbierto(false); e.currentTarget.blur(); }
-          }}
-          role="combobox"
-          aria-expanded={abierto}
-          aria-autocomplete="list"
-          autoComplete="off"
-        />
-        {elegido && !abierto && (
-          <button type="button" className="lb-cliente-quitar" onClick={() => onChange('')} aria-label="Quitar cliente">
-            <X size={14} />
-          </button>
-        )}
-      </div>
-      {abierto && (
-        <ul className="lb-cliente-lista" role="listbox">
-          {lista.length === 0 && <li className="lb-vacio-li">Sin coincidencias</li>}
-          {lista.map((c) => (
-            <li key={c.ruc}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={c.ruc === valor}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { onChange(c.ruc); setAbierto(false); setTexto(''); }}
-              >
-                <strong>{c.nombre}</strong>
-                <small>RUC {c.ruc}{c.libros ? ` · ${c.libros} ${c.libros === 1 ? 'libro' : 'libros'}` : ''}</small>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 // ── Importar ──────────────────────────────────────────────────────────────
 function Importador({ clientes, preset, onCerrar, onGuardado }) {
@@ -209,7 +140,7 @@ function Importador({ clientes, preset, onCerrar, onGuardado }) {
               <div className="lb-form">
                 <div className="lb-campo lb-campo-ancho">
                   <label htmlFor="lb-imp-cliente">Cliente</label>
-                  <ClienteSelect id="lb-imp-cliente" clientes={clientes} valor={ruc} onChange={(v) => { setRuc(v); setExistente(null); }} />
+                  <ClienteSelect id="lb-imp-cliente" detalle={(c) => (c.libros ? ` · ${c.libros} ${c.libros === 1 ? 'libro' : 'libros'}` : '')} clientes={clientes} valor={ruc} onChange={(v) => { setRuc(v); setExistente(null); }} />
                   {!ruc && <small className="lb-falta">Elegí a qué cliente corresponde.</small>}
                   {ruc && libro.razonSocial && cliente && sugerirCliente(libro.razonSocial, [cliente]) === null && (
                     <small className="lb-falta">Ojo: el archivo dice «{libro.razonSocial}».</small>
@@ -558,7 +489,7 @@ export default function LibrosModule({ withDesktopSidebar = false }) {
           <section className="lb-filtros">
             <div className="lb-campo lb-campo-ancho">
               <label htmlFor="lb-cliente">Cliente</label>
-              <ClienteSelect id="lb-cliente" clientes={clientes} valor={ruc} onChange={setRuc} />
+              <ClienteSelect id="lb-cliente" detalle={(c) => (c.libros ? ` · ${c.libros} ${c.libros === 1 ? 'libro' : 'libros'}` : '')} clientes={clientes} valor={ruc} onChange={setRuc} />
             </div>
             {cliente && (
               <div className="lb-campo">

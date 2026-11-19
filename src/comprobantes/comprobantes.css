@@ -1,0 +1,382 @@
+/* Registro de comprobantes. Se apoya en las clases lb-* de libros.css. */
+
+.cp-modal {
+  width: min(760px, 100%);
+}
+
+.cp-form .lb-campo {
+  min-width: 0;
+}
+
+.cp-form small {
+  color: var(--rx-muted);
+  font-size: var(--rx-fs-2xs, 12px);
+}
+
+.cp-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--rx-soft);
+}
+
+.cp-seg button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--rx-muted);
+  font: inherit;
+  font-weight: 700;
+  font-size: var(--rx-fs-sm, 14px);
+  cursor: pointer;
+}
+
+.cp-seg button.is-on {
+  background: var(--rx-surface);
+  color: var(--rx-brand-dark, var(--rx-ink));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.cp-seg-corto {
+  display: none;
+}
+
+.cp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cp-span2 {
+  grid-column: span 2;
+}
+
+.cp-montos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--rx-line);
+  border-radius: 12px;
+}
+
+.cp-montos legend {
+  padding: 0 6px;
+  color: var(--rx-muted);
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 700;
+}
+
+.cp-form .cp-monto {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-total {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 62px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--rx-brand-soft);
+  color: var(--rx-brand-dark, var(--rx-ink));
+  text-align: right;
+}
+
+.cp-total span {
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 700;
+}
+
+.cp-total strong {
+  font-size: var(--rx-fs-md, 16px);
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-span-all {
+  grid-column: 1 / -1;
+}
+
+.cp-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--rx-fs-sm, 14px);
+}
+
+.cp-imputa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-imputa > span {
+  margin-right: 4px;
+  color: var(--rx-muted);
+  font-size: var(--rx-fs-2xs, 12px);
+  font-weight: 700;
+}
+
+.cp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--rx-line-strong);
+  border-radius: 999px;
+  font-size: var(--rx-fs-sm, 14px);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cp-chip.is-on {
+  border-color: var(--rx-brand);
+  background: var(--rx-brand-soft);
+  color: var(--rx-brand-dark, var(--rx-ink));
+}
+
+.cp-avisos {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border-radius: 10px;
+  background: var(--rx-amber-soft, rgba(191, 116, 22, 0.1));
+  color: var(--rx-amber, #9a5d10);
+  font-size: var(--rx-fs-xs, 13px);
+}
+
+/* Resumen */
+.cp-resumen {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.cp-resumen small {
+  color: var(--rx-muted);
+  font-size: var(--rx-fs-2xs, 12px);
+}
+
+.cp-resumen .is-favor {
+  background: var(--rx-green-soft, rgba(14, 107, 79, 0.12));
+  color: var(--rx-green, #0e6b4f);
+}
+
+/* Tabla */
+.cp-tabla .cp-mono {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cp-tabla td small {
+  color: var(--rx-muted);
+}
+
+.cp-tabla tr.is-nc .num {
+  color: var(--iva-pay, #b42318);
+}
+
+.cp-total-td {
+  font-weight: 700;
+}
+
+.cp-op {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cp-op-venta {
+  background: var(--rx-brand-soft);
+  color: var(--rx-brand-dark, var(--rx-ink));
+}
+
+.cp-op-compra {
+  background: var(--rx-soft);
+  color: var(--rx-muted);
+}
+
+.cp-tag {
+  display: inline-block;
+  margin: 1px 3px 1px 0;
+  padding: 1px 6px;
+  border: 1px solid var(--rx-line-strong);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cp-tag.is-no {
+  border-style: dashed;
+  color: var(--rx-muted);
+}
+
+.cp-acciones {
+  white-space: nowrap;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .cp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cp-montos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cp-total {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 44px;
+  }
+  .cp-span2 {
+    grid-column: 1 / -1;
+  }
+  .cp-seg button {
+    font-size: 0;
+  }
+  .cp-seg-corto {
+    display: inline;
+    font-size: var(--rx-fs-sm, 14px);
+  }
+  .cp-nuevo {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Tabla como tarjetas en el celular */
+  .cp-tabla-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  .cp-tabla,
+  .cp-tabla tbody {
+    display: block;
+  }
+  .cp-tabla thead {
+    display: none;
+  }
+  .cp-tabla tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--rx-line);
+    border-radius: 12px;
+    background: var(--rx-surface);
+  }
+  .cp-tabla td {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+    border: 0;
+    text-align: right;
+  }
+  .cp-tabla td::before {
+    content: attr(data-l);
+    color: var(--rx-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+  }
+  .cp-tabla td.nombre,
+  .cp-tabla td[data-l='Imputa'],
+  .cp-tabla td.cp-acciones,
+  .cp-tabla td.lb-vacio-td {
+    grid-column: 1 / -1;
+  }
+  .cp-tabla td.nombre {
+    font-weight: 700;
+  }
+  .cp-tabla td.cp-vacio {
+    display: none;
+  }
+  .cp-tabla td:not([data-l])::before {
+    content: none;
+  }
+  .cp-tabla td.cp-acciones {
+    justify-content: flex-end;
+    padding-top: 4px;
+    border-top: 1px dashed var(--rx-line);
+  }
+}
+
+/* Aviso en la liquidación del IVA */
+.cp-traer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--rx-brand);
+  border-radius: 12px;
+  background: var(--rx-brand-soft);
+  color: var(--rx-brand-dark, var(--rx-ink));
+}
+
+.cp-traer-txt {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cp-traer-txt small {
+  color: var(--rx-muted);
+}
+
+.cp-traer-conf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--rx-fs-xs, 13px);
+}
+
+.cp-tabla td.cp-quien {
+  min-width: 160px;
+  white-space: normal;
+}
+
+.cp-tabla td.cp-quien span,
+.cp-tabla td.cp-quien small {
+  display: block;
+}
+
+.cp-tabla td.cp-quien small {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+@media (max-width: 720px) {
+  .cp-tabla td.cp-quien {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    text-align: left;
+  }
+  .cp-tabla td.cp-quien::before {
+    content: none;
+  }
+}
+
+.cp-screen .lb-toast {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
