@@ -2643,9 +2643,11 @@ body {
    completa del velo (backdrop-filter) repinta en cada scroll/clic del
    modal y lo vuelve pastoso en PCs modestas. Solo para este modal se
    reemplaza por un velo oscuro apenas más opaco, sin blur. */
+/* Ojo con el orden: el compresor de CSS, si -webkit- va DESPUÉS, descarta
+   la propiedad estándar y Chrome seguía aplicando el blur. -webkit- primero. */
 .team-modal-overlay:has(> .settings-modal) {
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background-color: rgba(0, 0, 0, 0.58);
 }
 .team-modal.settings-modal {
