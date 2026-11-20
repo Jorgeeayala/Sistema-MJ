@@ -204,6 +204,8 @@ La extensión admite mensajes sólo desde estos orígenes exactos:
   el service worker vuelve a validar el origen completo y rechaza cualquier
   otro puerto.
 - `https://control-total-clientes.vercel.app/` (app publicada en Vercel).
+- `https://control-total-clientes-iva.vercel.app/` y `https://sistema-mj.vercel.app/`.
+- `https://sistema-mj-blue.vercel.app/` (app unificada, desde la 2.17).
 
 Los deploys de vista previa de Vercel (un subdominio distinto en cada deploy)
 quedan afuera a propósito: la extensión sólo funciona desde la dirección de

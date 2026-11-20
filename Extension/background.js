@@ -39,6 +39,8 @@ const ALLOWED_APP_ORIGINS = new Set([
   'https://control-total-clientes-iva.vercel.app',
   // App de pruebas (mismo ID de extensión que la real).
   'https://sistema-mj.vercel.app',
+  // App unificada publicada (Vercel, repo Jorgeeayala/Sistema-MJ).
+  'https://sistema-mj-blue.vercel.app',
 ]);
 
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
