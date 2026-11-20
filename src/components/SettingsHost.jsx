@@ -1,6 +1,7 @@
-import { forwardRef, lazy, Suspense, useImperativeHandle, useState } from 'react';
+import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useState } from 'react';
 
-const SettingsDialog = lazy(() => import('./SettingsDialog'));
+const cargarSettingsDialog = () => import('./SettingsDialog');
+const SettingsDialog = lazy(cargarSettingsDialog);
 
 // Contenedor del panel de Configuración. El estado «abierto» vive acá y no en
 // App: antes, abrir o cerrar Configuración volvía a dibujar toda la app (la
@@ -13,6 +14,18 @@ const SettingsHost = forwardRef(function SettingsHost(
 ) {
   const [abierto, setAbierto] = useState(false);
   useImperativeHandle(ref, () => ({ setAbierto }), []);
+
+  // El código del panel se baja en segundo plano unos segundos después de
+  // cargar la app: la primera vez que se abre ya no espera la descarga.
+  useEffect(() => {
+    const precargar = () => { cargarSettingsDialog().catch(() => { /* se reintenta al abrir */ }); };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(precargar, { timeout: 8000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(precargar, 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   if (!abierto && !mustChangePin) return null;
   return (
