@@ -34,7 +34,7 @@ const MAX_CASILLAS = 120;
 // Vercel (otro subdominio en cada deploy) no se agregan a propósito.
 const ALLOWED_APP_ORIGINS = new Set([
   'http://localhost:3000',
-  'https://control-total-clientes.vercel.app',
+  'https://mjsistema.vercel.app',
   // App con el módulo XML / KuDE (Jorgeeayala).
   'https://control-total-clientes-iva.vercel.app',
   // App de pruebas (mismo ID de extensión que la real).
