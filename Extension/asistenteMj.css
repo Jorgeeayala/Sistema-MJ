@@ -1,6 +1,7 @@
 /* Asistente MJ (asistenteMj.js). Base de Marangatu Helper; al final, lo propio del asistente (v2.18). */
 
-/* Botón flotante: sólo el logo de MJ (sin fondo, borde ni sombra). */
+/* Botón flotante: círculo blanco con el logo de MJ centrado (sin borde).
+   Una sombra gris suave para que se vea sobre fondos blancos. */
 #mjas-widget-toggle {
   position: fixed;
   z-index: 999999;
@@ -9,26 +10,28 @@
   padding: 0;
   margin: 0;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
   outline: none;
   cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
 }
 #mjas-widget-toggle img {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: 72%;
+  height: 72%;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
 }
-#mjas-widget-toggle:hover { transform: scale(1.08); }
+#mjas-widget-toggle:hover { transform: scale(1.08); box-shadow: 0 4px 14px rgba(15, 23, 42, 0.24); }
 #mjas-widget-toggle:active { transform: scale(0.97); }
 #mjas-widget-toggle:focus-visible { outline: 2px solid #1f5f8b; outline-offset: 3px; border-radius: 12px; }
 

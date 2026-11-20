@@ -23,10 +23,12 @@ chrome.runtime.onConnectExternal.addListener((port) => {
     return;
   }
   puertosBuscador.push(port);
+  mantenerDespierto();
   port.onDisconnect.addListener(() => {
     void chrome.runtime.lastError;
     const i = puertosBuscador.indexOf(port);
     if (i >= 0) puertosBuscador.splice(i, 1);
+    mantenerDespierto();
   });
   port.onMessage.addListener((m) => {
     const pedido = m && pedidosBuscador.get(m.id);
@@ -38,10 +40,26 @@ chrome.runtime.onConnectExternal.addListener((port) => {
   try { port.postMessage({ tipo: 'hola' }); } catch { /* se cerró */ }
 });
 
-// Al despertar el service worker no hay puertos: la app los reabre en uno o
-// dos segundos. Se espera un poco antes de decir que la app no está.
+// Chrome duerme el service worker a los ~30 s sin actividad y eso corta el
+// puerto. La pestaña de Control Clientes suele estar en segundo plano, donde
+// Chrome demora sus temporizadores hasta 1 minuto: la app tardaba en
+// reconectar y el buscador decía «Abrí Control Clientes» con la app abierta.
+// Mientras haya una app conectada, una llamada liviana cada 20 s mantiene
+// despierto el service worker (y con él, el puerto). Sin app, se apaga.
+let despertador = null;
+function mantenerDespierto() {
+  if (puertosBuscador.length && !despertador) {
+    despertador = setInterval(() => { chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError); }, 20000);
+  } else if (!puertosBuscador.length && despertador) {
+    clearInterval(despertador);
+    despertador = null;
+  }
+}
+
+// Si igual se durmió, al despertar no hay puertos: la app los reabre. Se
+// espera hasta 8 s antes de decir que la app no está.
 async function puertoBuscador() {
-  for (let i = 0; i < 12 && !puertosBuscador.length; i += 1) await dormir(250);
+  for (let i = 0; i < 32 && !puertosBuscador.length; i += 1) await dormir(250);
   return puertosBuscador[puertosBuscador.length - 1] || null;
 }
 

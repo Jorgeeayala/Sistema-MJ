@@ -258,8 +258,10 @@ export function conectarBuscadorExtension(responder) {
       return;
     }
     const abiertoEn = Date.now();
+    let vivo = false;
     puerto.onMessage.addListener((m) => {
       fallos = 0;
+      vivo = true;
       if (!m || m.tipo === 'hola') return;
       let r = null;
       try { r = responder(m); } catch { r = { tipo: 'error', ok: false, error: 'ERROR' }; }
@@ -268,19 +270,34 @@ export function conectarBuscadorExtension(responder) {
       }
     });
     puerto.onDisconnect.addListener(() => {
-      const sinExtension = Boolean(runtime.lastError) && Date.now() - abiertoEn < 1000;
+      const duro = Date.now() - abiertoEn;
+      const sinExtension = Boolean(runtime.lastError) && duro < 1000;
       puerto = null;
       if (!activo) return;
+      // La extensión estaba y se durmió su service worker: se reconecta YA.
+      // Con la pestaña en segundo plano Chrome demora los temporizadores hasta
+      // 1 minuto, y mientras tanto el buscador del ícono no encontraba la app.
+      if (vivo && duro > 2000) { fallos = 0; conectar(); return; }
       fallos += 1;
       if (sinExtension && fallos > 5) return; // no está instalada: no insistir
       timer = setTimeout(conectar, Math.min(30000, 1000 * fallos));
     });
   };
 
+  // Al volver a la pestaña, si quedó desconectada, se reintenta enseguida.
+  const alVolver = () => {
+    if (document.visibilityState !== 'visible' || puerto || !activo) return;
+    clearTimeout(timer);
+    fallos = 0;
+    conectar();
+  };
+  document.addEventListener('visibilitychange', alVolver);
+
   conectar();
   return () => {
     activo = false;
     clearTimeout(timer);
+    document.removeEventListener('visibilitychange', alVolver);
     try { puerto?.disconnect(); } catch { /* ya cerrado */ }
   };
 }

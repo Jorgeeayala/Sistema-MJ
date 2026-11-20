@@ -11,7 +11,7 @@
 
   const NOTA = estado.textContent;
   const ERRORES = {
-    SIN_APP: 'Abrí Control Clientes en una pestaña (con tu sesión y un mes elegido) y probá de nuevo.',
+    SIN_APP: 'No encuentro Control Clientes. Abrila (con tu sesión y un mes elegido); si ya está abierta, recargá su pestaña una vez y probá de nuevo.',
     SIN_RESPUESTA: 'Control Clientes no respondió. Recargá su pestaña y probá de nuevo.',
     SIN_CLIENTE: 'El cliente ya no está en la lista. Buscalo de nuevo.',
     SIN_CLAVE: 'Ese cliente no tiene Clave MH cargada en la planilla.',
@@ -49,7 +49,7 @@
     const texto = q.value.trim();
     const n = ++consulta;
     if (!texto) { items = []; sel = -1; dibujar(); ponerEstado(); return; }
-    ponerEstado('Buscando…');
+    ponerEstado('Buscando en Control Clientes…');
     chrome.runtime.sendMessage({ action: 'BUSCADOR_BUSCAR', q: texto }, (r) => {
       void chrome.runtime.lastError;
       if (n !== consulta) return; // llegó una búsqueda más nueva
