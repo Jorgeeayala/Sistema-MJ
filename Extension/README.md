@@ -321,7 +321,10 @@ Integra lo útil de dos extensiones sueltas («Ekuatia Login» con CSV y
   declaración** y **Menú principal**. Desde otra pantalla vuelve primero al
   menú principal y sigue solo. Se arrastra, se bloquea y cambia de tamaño
   (engranaje). Desde la 2.19 los íconos son SVG en línea (trazos de Lucide)
-  con animaciones CSS al pasar el mouse; nada de emojis. El logo se carga desde la extensión (`web_accessible_resources`, sólo
+  con animaciones CSS al pasar el mouse; nada de emojis. Desde la 2.20 el
+  botón es sólo el logo (`asistente-logo.png`: el ícono sin su cuadro blanco,
+  sin borde ni sombra) y los nombres internos usan el prefijo `mjas-`/`mjas_`
+  para no chocar con el Marangatu Helper original si sigue instalado. El logo se carga desde la extensión (`web_accessible_resources`, sólo
   para Marangatu). Los CDC se marcan con la
   columna **XML** del recolector: el «Extraer / Procesar KuDE» del helper
   original no se integró (repetía el recolector, y el proceso de KuDE no

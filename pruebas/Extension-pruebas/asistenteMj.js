@@ -19,28 +19,29 @@
 (function () {
   'use strict';
   if (window !== window.top) return;
-  if (document.getElementById('mara-widget')) return;
+  if (document.getElementById('mjas-widget')) return;
   if (/\/eset\/login/i.test(location.pathname)) return; // en el acceso no hace falta
 
   var INICIO_URL = 'https://marangatu.set.gov.py/eset/';
-  var LOGO = chrome.runtime.getURL('icono-128.png');
+  // Logo sin el cuadro blanco del ícono (fondo transparente).
+  var LOGO = chrome.runtime.getURL('asistente-logo.png');
 
-  var TAB_ID = sessionStorage.getItem('mara_tab_id');
+  var TAB_ID = sessionStorage.getItem('mjas_tab_id');
   if (!TAB_ID) {
     TAB_ID = Math.random().toString(36).slice(2);
-    sessionStorage.setItem('mara_tab_id', TAB_ID);
+    sessionStorage.setItem('mjas_tab_id', TAB_ID);
   }
 
   // Datos de versiones anteriores (helper original y botón de calendario de la 2.16).
   try {
-    localStorage.removeItem('mara_current_cdc');
-    localStorage.removeItem('mara_cdc_action');
-    var viejo = JSON.parse(localStorage.getItem('mara_state') || 'null');
-    if (viejo && viejo.cdcList) localStorage.setItem('mara_state', JSON.stringify({ lastMonth: viejo.lastMonth || null, lastYear: viejo.lastYear || null }));
-    if (!localStorage.getItem('mj_asistente_v2')) { localStorage.removeItem('mara_position'); localStorage.setItem('mj_asistente_v2', '1'); }
-    var oldPos = JSON.parse(localStorage.getItem('mara_position') || 'null');
-    if (oldPos && (oldPos.x < 0 || oldPos.y < 0 || oldPos.x > window.innerWidth || oldPos.y > window.innerHeight)) localStorage.removeItem('mara_position');
-  } catch { localStorage.removeItem('mara_config'); localStorage.removeItem('mara_position'); }
+    localStorage.removeItem('mjas_current_cdc');
+    localStorage.removeItem('mjas_cdc_action');
+    var viejo = JSON.parse(localStorage.getItem('mjas_state') || 'null');
+    if (viejo && viejo.cdcList) localStorage.setItem('mjas_state', JSON.stringify({ lastMonth: viejo.lastMonth || null, lastYear: viejo.lastYear || null }));
+    if (!localStorage.getItem('mj_asistente_v2')) { localStorage.removeItem('mjas_position'); localStorage.setItem('mj_asistente_v2', '1'); }
+    var oldPos = JSON.parse(localStorage.getItem('mjas_position') || 'null');
+    if (oldPos && (oldPos.x < 0 || oldPos.y < 0 || oldPos.x > window.innerWidth || oldPos.y > window.innerHeight)) localStorage.removeItem('mjas_position');
+  } catch { localStorage.removeItem('mjas_config'); localStorage.removeItem('mjas_position'); }
 
   var PAGE = detectPage();
 
@@ -85,37 +86,37 @@
   };
   function loadConfig() {
     try {
-      var c = JSON.parse(localStorage.getItem('mara_config') || 'null');
+      var c = JSON.parse(localStorage.getItem('mjas_config') || 'null');
       if (c) return { locked: !!c.locked, size: SIZES[c.size] ? c.size : 'medium' };
     } catch { /* por defecto */ }
     return { locked: false, size: 'medium' };
   }
-  function saveConfig() { localStorage.setItem('mara_config', JSON.stringify(config)); applySize(); }
+  function saveConfig() { localStorage.setItem('mjas_config', JSON.stringify(config)); applySize(); }
   var config = loadConfig();
 
   function applySize() {
     var s = SIZES[config.size] || SIZES.medium;
-    var w = document.getElementById('mara-widget');
-    var t = document.getElementById('mara-widget-toggle');
+    var w = document.getElementById('mjas-widget');
+    var t = document.getElementById('mjas-widget-toggle');
     if (w) { w.style.width = s.width + 'px'; w.style.fontSize = s.fontSize + 'px'; }
     if (t) { t.style.width = s.btnSize + 'px'; t.style.height = s.btnSize + 'px'; }
   }
 
   function loadState() {
-    try { var s = JSON.parse(localStorage.getItem('mara_state') || 'null'); if (s) return s; } catch { /* vacío */ }
+    try { var s = JSON.parse(localStorage.getItem('mjas_state') || 'null'); if (s) return s; } catch { /* vacío */ }
     return { lastMonth: null, lastYear: null };
   }
-  function saveState() { localStorage.setItem('mara_state', JSON.stringify({ lastMonth: state.lastMonth, lastYear: state.lastYear })); }
+  function saveState() { localStorage.setItem('mjas_state', JSON.stringify({ lastMonth: state.lastMonth, lastYear: state.lastYear })); }
 
   // Destino pendiente: { active, dest, step, ts, tabId, url }.
   function loadNav() {
-    try { var n = JSON.parse(localStorage.getItem('mara_nav') || 'null'); if (n) return n; } catch { /* vacío */ }
+    try { var n = JSON.parse(localStorage.getItem('mjas_nav') || 'null'); if (n) return n; } catch { /* vacío */ }
     return { active: false };
   }
   function saveNav(dest, step) {
-    localStorage.setItem('mara_nav', JSON.stringify({ active: true, dest: dest, step: step, ts: Date.now(), tabId: TAB_ID, url: window.location.href }));
+    localStorage.setItem('mjas_nav', JSON.stringify({ active: true, dest: dest, step: step, ts: Date.now(), tabId: TAB_ID, url: window.location.href }));
   }
-  function clearNav() { localStorage.removeItem('mara_nav'); }
+  function clearNav() { localStorage.removeItem('mjas_nav'); }
 
   var persisted = loadState();
   var state = { lastMonth: persisted.lastMonth, lastYear: persisted.lastYear, open: false };
@@ -125,10 +126,10 @@
     return { x: 18, y: window.innerHeight - s.btnSize - 18 };
   }
   function loadPosition() {
-    try { var p = JSON.parse(localStorage.getItem('mara_position') || 'null'); if (p) return p; } catch { /* por defecto */ }
+    try { var p = JSON.parse(localStorage.getItem('mjas_position') || 'null'); if (p) return p; } catch { /* por defecto */ }
     return defaultPosition();
   }
-  function savePosition(x, y) { localStorage.setItem('mara_position', JSON.stringify({ x: x, y: y })); }
+  function savePosition(x, y) { localStorage.setItem('mjas_position', JSON.stringify({ x: x, y: y })); }
 
   function xpathEl(path) {
     return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -174,7 +175,7 @@
     });
   }
 
-  function visible(el) { return el && el.offsetParent !== null && !el.closest('#mara-widget'); }
+  function visible(el) { return el && el.offsetParent !== null && !el.closest('#mjas-widget'); }
 
   // Elemento clicable (enlace, botón, ítem) cuyo texto contiene `texto`.
   function findClickableByText(texto) {
@@ -212,7 +213,7 @@
         push(el);
       }
     }
-    return results.filter(function (e) { return !e.closest('#mara-widget'); });
+    return results.filter(function (e) { return !e.closest('#mjas-widget'); });
   }
   function findMenuCard(text, occurrence) {
     var m = findMenuCards(text);
@@ -225,36 +226,36 @@
   }
 
   // --- Pantallas del panel -----------------------------------------------------
-  function body() { return document.getElementById('mara-body'); }
+  function body() { return document.getElementById('mjas-body'); }
   function openWidget() {
     if (state.open) return;
     state.open = true;
-    document.getElementById('mara-widget').classList.add('mara-open');
-    document.getElementById('mara-widget-toggle').classList.add('mj-activo');
+    document.getElementById('mjas-widget').classList.add('mjas-open');
+    document.getElementById('mjas-widget-toggle').classList.add('mj-activo');
     positionWidget();
   }
   function closeWidget() {
     state.open = false;
-    document.getElementById('mara-widget').classList.remove('mara-open');
-    document.getElementById('mara-widget-toggle').classList.remove('mj-activo');
+    document.getElementById('mjas-widget').classList.remove('mjas-open');
+    document.getElementById('mjas-widget-toggle').classList.remove('mj-activo');
   }
   function navStatus(text) {
-    body().innerHTML = '<div class="mara-nav-status"><div class="mara-nav-spinner"></div><span>' + text + '</span></div>';
+    body().innerHTML = '<div class="mjas-nav-status"><div class="mjas-nav-spinner"></div><span>' + text + '</span></div>';
   }
   function navError(text) {
-    body().innerHTML = '<div class="mara-status error mj-estado">' + svg('alerta') + '<span>' + text + '</span></div>';
+    body().innerHTML = '<div class="mjas-status error mj-estado">' + svg('alerta') + '<span>' + text + '</span></div>';
     clearNav();
     setTimeout(function () { if (state.open) showMenu(); }, 2200);
   }
   function navDone(text) {
-    body().innerHTML = '<div class="mara-status success mj-estado">' + svg('ok', 'mj-dibuja') + '<span>' + text + '</span></div>';
+    body().innerHTML = '<div class="mjas-status success mj-estado">' + svg('ok', 'mj-dibuja') + '<span>' + text + '</span></div>';
     setTimeout(closeWidget, 900);
   }
 
   function updateContextBar() {
-    var bar = document.getElementById('mara-context-bar');
+    var bar = document.getElementById('mjas-context-bar');
     if (!bar) return;
-    bar.innerHTML = '<span class="mara-ctx-dot" style="background:' + PAGE.color + '"></span><span class="mara-ctx-label">Estás en: ' + esc(PAGE.label) + '</span>';
+    bar.innerHTML = '<span class="mjas-ctx-dot" style="background:' + PAGE.color + '"></span><span class="mjas-ctx-label">Estás en: ' + esc(PAGE.label) + '</span>';
   }
 
   function showMenu() {
@@ -264,7 +265,7 @@
       html += '<button class="mj-dest mj-dest-destacado" id="mj-periodo"><span class="mj-dest-icono">' + svg('calendario') + '</span>' +
         '<span class="mj-dest-texto"><strong>Buscar por mes</strong><small>Elegir mes y año en esta pantalla</small></span></button>';
     }
-    html += '<p class="mara-step-label">¿A dónde vamos?</p><div class="mj-destinos">';
+    html += '<p class="mjas-step-label">¿A dónde vamos?</p><div class="mj-destinos">';
     DESTINOS.forEach(function (d) {
       var aca = d.id === PAGE.id || (d.id === 'inicio' && PAGE.id === 'main');
       html += '<button class="mj-dest' + (aca ? ' mj-aca' : '') + '" data-dest="' + d.id + '"' + (aca ? ' disabled' : '') + '>' +
@@ -381,7 +382,7 @@
     navStatus('Buscando Presentar declaración…');
     waitFor(function () {
       var link = document.querySelector('a[href*="recibirDDJJContribuyente.do"]');
-      if (link && !link.closest('#mara-widget')) return link;
+      if (link && !link.closest('#mjas-widget')) return link;
       return findClickableByText('Presentar Declaraci');
     }, 8000)
       .then(function (link) {
@@ -399,19 +400,19 @@
     var hasYear = state.lastYear !== null && state.lastYear !== undefined;
     var html = '';
     if (hasYear) {
-      html += '<button class="mara-year-bar" id="mara-change-year">' +
-        '<span class="mara-year-bar-text">Año: <strong>' + state.lastYear + '</strong></span>' +
-        '<span class="mara-year-bar-arrow">cambiar ' + svg('seguir') + '</span></button>';
+      html += '<button class="mjas-year-bar" id="mjas-change-year">' +
+        '<span class="mjas-year-bar-text">Año: <strong>' + state.lastYear + '</strong></span>' +
+        '<span class="mjas-year-bar-arrow">cambiar ' + svg('seguir') + '</span></button>';
     }
-    html += '<p class="mara-step-label">Elegí el mes</p><div class="mara-month-grid" id="mara-months"></div>' +
-      '<p class="mara-hint">Para bajar XML, marcá los CDC en la columna <b>XML</b> de la tabla («Marcar todas las páginas» y «Crear lote»).</p>' +
-      '<button class="mara-back-btn" id="mara-back">' + svg('volver') + ' Destinos</button>';
+    html += '<p class="mjas-step-label">Elegí el mes</p><div class="mjas-month-grid" id="mjas-months"></div>' +
+      '<p class="mjas-hint">Para bajar XML, marcá los CDC en la columna <b>XML</b> de la tabla («Marcar todas las páginas» y «Crear lote»).</p>' +
+      '<button class="mjas-back-btn" id="mjas-back">' + svg('volver') + ' Destinos</button>';
     body().innerHTML = html;
 
-    var container = document.getElementById('mara-months');
+    var container = document.getElementById('mjas-months');
     MONTHS.forEach(function (m) {
       var btn = document.createElement('button');
-      btn.className = 'mara-month-btn' + (state.lastMonth === m.value ? ' last-used' : '');
+      btn.className = 'mjas-month-btn' + (state.lastMonth === m.value ? ' last-used' : '');
       btn.textContent = m.label;
       btn.addEventListener('click', function (e) {
         e.stopPropagation(); state.lastMonth = m.value; saveState();
@@ -419,18 +420,18 @@
       });
       container.appendChild(btn);
     });
-    var cb = document.getElementById('mara-change-year');
+    var cb = document.getElementById('mjas-change-year');
     if (cb) cb.addEventListener('click', function (e) { e.stopPropagation(); yearGrid('Cambiar año', function () { showMonths(); }); });
-    document.getElementById('mara-back').addEventListener('click', function (e) { e.stopPropagation(); showMenu(); });
+    document.getElementById('mjas-back').addEventListener('click', function (e) { e.stopPropagation(); showMenu(); });
   }
 
   function yearGrid(title, onPick, intro) {
     updateContextBar();
-    body().innerHTML = (intro || '') + '<p class="mara-step-label">' + title + '</p><div class="mara-year-grid" id="mara-years"></div>';
-    var c = document.getElementById('mara-years');
+    body().innerHTML = (intro || '') + '<p class="mjas-step-label">' + title + '</p><div class="mjas-year-grid" id="mjas-years"></div>';
+    var c = document.getElementById('mjas-years');
     YEARS.forEach(function (y) {
       var btn = document.createElement('button');
-      btn.className = 'mara-year-item' + (state.lastYear === y ? ' selected' : '');
+      btn.className = 'mjas-year-item' + (state.lastYear === y ? ' selected' : '');
       btn.textContent = y;
       btn.addEventListener('click', function (e) { e.stopPropagation(); state.lastYear = y; saveState(); onPick(y); });
       c.appendChild(btn);
@@ -439,7 +440,7 @@
   function showYears() {
     var m = getMonthObj(state.lastMonth);
     yearGrid('Elegí el año', function (y) { executeFirst(state.lastMonth, y); },
-      '<div class="mara-chosen"><span class="mara-chosen-label">Mes:</span><span class="mara-chosen-value">' + m.full + '</span></div>');
+      '<div class="mjas-chosen"><span class="mjas-chosen-label">Mes:</span><span class="mjas-chosen-value">' + m.full + '</span></div>');
   }
 
   function selectPeriod(month, year) {
@@ -476,60 +477,60 @@
     }, 400);
   }
   function showStatusInBody(msg, type) {
-    var ico = type === 'success' ? svg('ok', 'mj-dibuja') : type === 'error' ? svg('alerta') : '<div class="mara-nav-spinner"></div>';
-    body().innerHTML = '<div class="mara-status mj-estado ' + type + '">' + ico + '<span>' + msg + '</span></div>';
+    var ico = type === 'success' ? svg('ok', 'mj-dibuja') : type === 'error' ? svg('alerta') : '<div class="mjas-nav-spinner"></div>';
+    body().innerHTML = '<div class="mjas-status mj-estado ' + type + '">' + ico + '<span>' + msg + '</span></div>';
   }
 
   // --- Configuración ---------------------------------------------------------------
   function showConfig() {
     updateContextBar();
     body().innerHTML =
-      '<p class="mara-step-label">Configuración</p>' +
-      '<div class="mara-config-item"><span class="mara-config-label">Bloquear posición</span>' +
-        '<button class="mara-toggle ' + (config.locked ? 'active' : '') + '" id="mara-toggle-lock">' + (config.locked ? svg('candado') + ' Bloqueado' : svg('abierto') + ' Libre') + '</button></div>' +
-      '<div class="mara-config-item"><span class="mara-config-label">Tamaño</span><div class="mara-size-btns">' +
-        '<button class="mara-size-btn ' + (config.size === 'small' ? 'active' : '') + '" data-size="small">S</button>' +
-        '<button class="mara-size-btn ' + (config.size === 'medium' ? 'active' : '') + '" data-size="medium">M</button>' +
-        '<button class="mara-size-btn ' + (config.size === 'large' ? 'active' : '') + '" data-size="large">L</button>' +
+      '<p class="mjas-step-label">Configuración</p>' +
+      '<div class="mjas-config-item"><span class="mjas-config-label">Bloquear posición</span>' +
+        '<button class="mjas-toggle ' + (config.locked ? 'active' : '') + '" id="mjas-toggle-lock">' + (config.locked ? svg('candado') + ' Bloqueado' : svg('abierto') + ' Libre') + '</button></div>' +
+      '<div class="mjas-config-item"><span class="mjas-config-label">Tamaño</span><div class="mjas-size-btns">' +
+        '<button class="mjas-size-btn ' + (config.size === 'small' ? 'active' : '') + '" data-size="small">S</button>' +
+        '<button class="mjas-size-btn ' + (config.size === 'medium' ? 'active' : '') + '" data-size="medium">M</button>' +
+        '<button class="mjas-size-btn ' + (config.size === 'large' ? 'active' : '') + '" data-size="large">L</button>' +
       '</div></div>' +
-      '<div class="mara-config-item"><span class="mara-config-label">Posición</span><button class="mara-reset-btn" id="mara-reset-pos">' + svg('reiniciar') + ' Abajo a la izquierda</button></div>' +
-      '<button class="mara-back-btn" id="mara-back">' + svg('volver') + ' Volver</button>';
+      '<div class="mjas-config-item"><span class="mjas-config-label">Posición</span><button class="mjas-reset-btn" id="mjas-reset-pos">' + svg('reiniciar') + ' Abajo a la izquierda</button></div>' +
+      '<button class="mjas-back-btn" id="mjas-back">' + svg('volver') + ' Volver</button>';
 
-    document.getElementById('mara-toggle-lock').addEventListener('click', function (e) {
+    document.getElementById('mjas-toggle-lock').addEventListener('click', function (e) {
       e.stopPropagation(); config.locked = !config.locked; saveConfig(); showConfig();
     });
-    document.querySelectorAll('.mara-size-btn').forEach(function (btn) {
+    document.querySelectorAll('.mjas-size-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) { e.stopPropagation(); config.size = btn.dataset.size; saveConfig(); showConfig(); positionWidget(); });
     });
-    document.getElementById('mara-reset-pos').addEventListener('click', function (e) {
-      e.stopPropagation(); localStorage.removeItem('mara_position'); syncPosition(); positionWidget();
+    document.getElementById('mjas-reset-pos').addEventListener('click', function (e) {
+      e.stopPropagation(); localStorage.removeItem('mjas_position'); syncPosition(); positionWidget();
     });
-    document.getElementById('mara-back').addEventListener('click', function (e) { e.stopPropagation(); showMenu(); });
+    document.getElementById('mjas-back').addEventListener('click', function (e) { e.stopPropagation(); showMenu(); });
   }
 
   // --- Armado ----------------------------------------------------------------------
   function buildWidget() {
     var w = document.createElement('div');
-    w.id = 'mara-widget';
+    w.id = 'mjas-widget';
     w.innerHTML =
-      '<div class="mara-header">' +
-        '<div class="mara-header-left">' +
+      '<div class="mjas-header">' +
+        '<div class="mjas-header-left">' +
           '<img class="mj-header-logo" src="' + LOGO + '" alt="">' +
-          '<span class="mj-header-titulos"><span class="mara-header-title">Asistente MJ</span><small>Navegación en Marangatu</small></span>' +
+          '<span class="mj-header-titulos"><span class="mjas-header-title">Asistente MJ</span><small>Navegación en Marangatu</small></span>' +
         '</div>' +
-        '<div class="mara-header-right">' +
-          '<button class="mara-config-btn" id="mara-config-btn" title="Configuración">' + svg('ajustes', 'mj-gira') + '</button>' +
-          '<button class="mara-close-btn" id="mara-close" title="Cerrar">' + svg('cerrar') + '</button>' +
+        '<div class="mjas-header-right">' +
+          '<button class="mjas-config-btn" id="mjas-config-btn" title="Configuración">' + svg('ajustes', 'mj-gira') + '</button>' +
+          '<button class="mjas-close-btn" id="mjas-close" title="Cerrar">' + svg('cerrar') + '</button>' +
         '</div>' +
       '</div>' +
-      '<div class="mara-context-bar" id="mara-context-bar"></div>' +
-      '<div class="mara-body" id="mara-body"></div>';
+      '<div class="mjas-context-bar" id="mjas-context-bar"></div>' +
+      '<div class="mjas-body" id="mjas-body"></div>';
     return w;
   }
 
   function buildToggle() {
     var btn = document.createElement('button');
-    btn.id = 'mara-widget-toggle';
+    btn.id = 'mjas-widget-toggle';
     btn.type = 'button';
     btn.title = config.locked ? 'Asistente MJ' : 'Asistente MJ (arrastrá para mover)';
     btn.setAttribute('aria-label', 'Asistente MJ');
@@ -573,7 +574,7 @@
 
   // El panel se abre del lado del botón que tenga más lugar.
   function positionWidget() {
-    var w = document.getElementById('mara-widget'), t = document.getElementById('mara-widget-toggle');
+    var w = document.getElementById('mjas-widget'), t = document.getElementById('mjas-widget-toggle');
     if (!w || !t) return;
     var r = t.getBoundingClientRect(), s = SIZES[config.size] || SIZES.medium;
     var alto = Math.min(w.offsetHeight || 440, window.innerHeight - 16);
@@ -585,31 +586,31 @@
   }
 
   function syncPosition() {
-    var btn = document.getElementById('mara-widget-toggle'); if (!btn) return;
+    var btn = document.getElementById('mjas-widget-toggle'); if (!btn) return;
     var pos = loadPosition(); btn.style.left = pos.x + 'px'; btn.style.top = pos.y + 'px';
   }
 
   function init() {
-    if (!document.body || document.getElementById('mara-widget')) return;
+    if (!document.body || document.getElementById('mjas-widget')) return;
     document.body.appendChild(buildWidget());
     document.body.appendChild(buildToggle());
     applySize();
 
     // El contenido cambia de alto (menú, meses, estados): se reubica solo.
     if (window.ResizeObserver) {
-      new ResizeObserver(function () { if (state.open) positionWidget(); }).observe(document.getElementById('mara-widget'));
+      new ResizeObserver(function () { if (state.open) positionWidget(); }).observe(document.getElementById('mjas-widget'));
     }
 
-    document.getElementById('mara-close').addEventListener('click', function (e) { e.stopPropagation(); closeWidget(); });
-    document.getElementById('mara-config-btn').addEventListener('click', function (e) { e.stopPropagation(); showConfig(); });
+    document.getElementById('mjas-close').addEventListener('click', function (e) { e.stopPropagation(); closeWidget(); });
+    document.getElementById('mjas-config-btn').addEventListener('click', function (e) { e.stopPropagation(); showConfig(); });
 
     document.addEventListener('mousedown', function (e) {
       if (!state.open) return;
-      var w = document.getElementById('mara-widget'), t = document.getElementById('mara-widget-toggle');
+      var w = document.getElementById('mjas-widget'), t = document.getElementById('mjas-widget-toggle');
       if (w && t && !w.contains(e.target) && !t.contains(e.target)) closeWidget();
     });
     window.addEventListener('resize', function () {
-      var t = document.getElementById('mara-widget-toggle');
+      var t = document.getElementById('mjas-widget-toggle');
       if (!t) return;
       var size = t.offsetWidth;
       t.style.left = Math.min(parseInt(t.style.left, 10) || 0, window.innerWidth - size) + 'px';
@@ -618,9 +619,9 @@
     });
 
     window.addEventListener('storage', function (e) {
-      if (e.key === 'mara_position') syncPosition();
-      if (e.key === 'mara_config') { config = loadConfig(); applySize(); }
-      if (e.key === 'mara_state') { var p = loadState(); state.lastMonth = p.lastMonth; state.lastYear = p.lastYear; }
+      if (e.key === 'mjas_position') syncPosition();
+      if (e.key === 'mjas_config') { config = loadConfig(); applySize(); }
+      if (e.key === 'mjas_state') { var p = loadState(); state.lastMonth = p.lastMonth; state.lastYear = p.lastYear; }
     });
 
     var lastUrl = window.location.href;
@@ -665,7 +666,7 @@
 
   // Al imprimir, el asistente no sale en el papel.
   var st = document.createElement('style');
-  st.textContent = '@media print { #mara-widget, #mara-widget-toggle { display: none !important; } }';
+  st.textContent = '@media print { #mjas-widget, #mjas-widget-toggle { display: none !important; } }';
   (document.head || document.documentElement).appendChild(st);
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
