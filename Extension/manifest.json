@@ -44,7 +44,7 @@
   "externally_connectable": {
     "matches": [
       "http://localhost/*",
-      "https://control-total-clientes.vercel.app/*",
+      "https://mjsistema.vercel.app/*",
       "https://control-total-clientes-iva.vercel.app/*",
       "https://sistema-mj.vercel.app/*",
       "https://sistema-mj-blue.vercel.app/*"
