@@ -41,6 +41,7 @@ import GuidedTour from './components/GuidedTour';
 import { construirPasosGuia } from './guia/pasosGuia';
 const SettingsDialog = lazy(() => import('./components/SettingsDialog'));
 import { ClientsProvider, useClientsActions } from './context/ClientsContext';
+import BuscadorMarangatu from './components/BuscadorMarangatu';
 import { STORAGE_KEY_USER } from './config';
 import {
   FONT_SCALE_OPTIONS,
@@ -1316,6 +1317,9 @@ export default function App({
         year={authenticated ? year : null}
         month={authenticated ? month : null}
       >
+        {/* Buscador de clientes del ícono de la extensión: responde nombre y
+            RUC, y entra a Marangatu como el botón de la fila. */}
+        {authenticated && !readOnlyPreview && year && month && <BuscadorMarangatu />}
         {authenticated && avisoTarget && (
           <PendingClientOpener
             key={avisoTarget.key}

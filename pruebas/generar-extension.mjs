@@ -49,10 +49,10 @@ writeFileSync(rutaManifest, JSON.stringify(m, null, 2) + '\n');
 // Orígenes aceptados por el service worker
 reemplazar(join(DESTINO, 'background.js'), [["'" + ORIGEN_REAL + "'", "'" + APP_PRUEBAS + "'"]]);
 
-// Nombre visible en el popup (desde la 2.13 la ventana dice sólo «Ekuatia»)
+// Nombre visible en el popup (el encabezado dice «Extensión · MJ Estudio Contable»)
 reemplazar(join(DESTINO, 'popup.html'), [
   ['<title>Ekuatia</title>', '<title>' + NOMBRE + '</title>'],
-  ['<strong>Ekuatia</strong>', '<strong>Ekuatia PRUEBAS</strong>'],
+  ['<strong>Extensión</strong>', '<strong>Extensión PRUEBAS</strong>'],
 ]);
 
 writeFileSync(join(DESTINO, 'LEEME-PRUEBAS.txt'),

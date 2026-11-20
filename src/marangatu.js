@@ -237,6 +237,54 @@ export function suscribirDescargaIva(callback) {
   };
 }
 
+// Puerto del buscador de clientes del ícono de la extensión ('eku-buscador').
+// La extensión manda { id, tipo, ... } y responder(m) devuelve la respuesta
+// (o null). El service worker de la extensión se duerme y cierra el puerto:
+// se reabre con espera creciente (tope 30 s); sin extensión instalada, se deja
+// de intentar. Devuelve la función para cerrarlo.
+export function conectarBuscadorExtension(responder) {
+  const runtime = typeof chrome !== 'undefined' ? chrome.runtime : undefined;
+  if (!MARANGATU_EXT_ID || !runtime?.connect) return () => {};
+  let puerto = null;
+  let activo = true;
+  let fallos = 0;
+  let timer = null;
+
+  const conectar = () => {
+    if (!activo) return;
+    try {
+      puerto = runtime.connect(MARANGATU_EXT_ID, { name: 'eku-buscador' });
+    } catch {
+      return;
+    }
+    const abiertoEn = Date.now();
+    puerto.onMessage.addListener((m) => {
+      fallos = 0;
+      if (!m || m.tipo === 'hola') return;
+      let r = null;
+      try { r = responder(m); } catch { r = { tipo: 'error', ok: false, error: 'ERROR' }; }
+      if (r && puerto) {
+        try { puerto.postMessage({ ...r, id: m.id }); } catch { /* se cerró */ }
+      }
+    });
+    puerto.onDisconnect.addListener(() => {
+      const sinExtension = Boolean(runtime.lastError) && Date.now() - abiertoEn < 1000;
+      puerto = null;
+      if (!activo) return;
+      fallos += 1;
+      if (sinExtension && fallos > 5) return; // no está instalada: no insistir
+      timer = setTimeout(conectar, Math.min(30000, 1000 * fallos));
+    });
+  };
+
+  conectar();
+  return () => {
+    activo = false;
+    clearTimeout(timer);
+    try { puerto?.disconnect(); } catch { /* ya cerrado */ }
+  };
+}
+
 // Envía la ficha por WhatsApp Web a través de la extensión: abre el chat del
 // número con el texto escrito y pega la imagen. Quien envía es la persona.
 // imagen: data URL PNG. Resuelve { ok } o { ok: false, error } (NO_EXTENSION).

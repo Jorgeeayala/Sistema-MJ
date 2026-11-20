@@ -293,6 +293,33 @@ actual), **Descargas** (formularios IVA) y **Herramientas** (relevamientos,
 plegados). Claro y oscuro según el sistema. Los IDs de los controles no
 cambiaron: `popupUi.js` sólo maneja las pestañas, el indicador y la versión.
 
+## Buscador de clientes y botón «Comprobantes» (v2.16)
+
+Integra lo útil de dos extensiones sueltas («Ekuatia Login» con CSV y
+«Marangatu Helper»), sin sus partes inseguras o repetidas.
+
+- **Entrar a Marangatu (popup → Inicio):** se busca un cliente por nombre o
+  RUC y, al elegirlo, se entra con su Clave MH. **No hay CSV ni claves en la
+  extensión:** el popup pregunta a Control Clientes, que tiene que estar
+  abierta en una pestaña con sesión y un mes elegido. La app mantiene un
+  puerto `eku-buscador` (`src/components/BuscadorMarangatu.jsx`) y
+  `buscadorBg.js` le reenvía las preguntas del popup (`popupBuscador.js`):
+  - `buscar` → la app responde hasta 8 clientes de **su** lista (los que esa
+    persona ve), sólo nombre, RUC y si tiene clave.
+  - `entrar` → la app confirma el RUC de la fila y hace lo mismo que el botón
+    Marangatu de la fila (`APP_AUTO_LOGIN`). La clave va de la app al login
+    por el camino de siempre; nunca pasa por el popup ni se guarda.
+  El puerto valida el origen igual que el resto del puente.
+- **Botón 📅 «Comprobantes» en Marangatu (`comprobantesHelper.js/.css`):**
+  «Ir a Comprobantes» recorre Declaraciones Informativas → Gestión de
+  Comprobantes → Obtener Comprob. Elect. y Virtuales (cada ventana nueva
+  retoma el paso). En esa pantalla, elegir mes y año busca con un clic. Se
+  arrastra, se bloquea y cambia de tamaño (⚙). Los CDC se marcan con la
+  columna **XML** del recolector: el «Extraer / Procesar KuDE» del helper
+  original no se integró (repetía el recolector, y el proceso de KuDE no
+  funcionaba entre Marangatu y eKuatia).
+- No se integraron: el CSV con contraseñas ni el script de AutoHotkey.
+
 ## Simulador del flujo (pruebas)
 
 `pruebas/extension-sim/flujo-iva.mjs` carga esta extensión en Chromium contra
