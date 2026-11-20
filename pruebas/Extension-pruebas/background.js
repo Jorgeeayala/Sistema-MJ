@@ -41,6 +41,8 @@ const ALLOWED_APP_ORIGINS = new Set([
   'https://sistema-mj.vercel.app',
   // App unificada publicada (Vercel, repo Jorgeeayala/Sistema-MJ).
   'https://sistema-mj-blue.vercel.app',
+  // App publicada con la cuenta nueva (Vercel).
+  'https://mjsistema.vercel.app',
 ]);
 
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
