@@ -1,4 +1,4 @@
-/* Botón flotante «Comprobantes» (de Marangatu Helper, v2.16). Lo usa comprobantesHelper.js. */
+/* Asistente MJ (asistenteMj.js). Base de Marangatu Helper; al final, lo propio del asistente (v2.18). */
 
 #mara-widget-toggle {
   position: fixed;
@@ -851,3 +851,120 @@
 .mara-hint b {
   color: #34d399;
 }
+
+/* ── Asistente MJ (v2.18) ─────────────────────────────────────── */
+
+/* Botón flotante con el logo de MJ */
+#mara-widget-toggle {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #1f5f8b;
+  box-shadow: 0 6px 22px rgba(23, 63, 95, 0.45);
+  cursor: grab;
+  overflow: visible;
+}
+#mara-widget-toggle img {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+}
+#mara-widget-toggle::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(31, 95, 139, 0.55);
+  animation: mjPulso 2.6s ease-out infinite;
+  pointer-events: none;
+}
+#mara-widget-toggle.mj-activo::after { animation: none; opacity: 0; }
+#mara-widget-toggle:hover {
+  transform: scale(1.07);
+  box-shadow: 0 8px 28px rgba(23, 63, 95, 0.55);
+}
+#mara-widget-toggle:active { transform: scale(1.02); }
+#mara-widget-toggle.mj-activo { border-color: #1a7f8e; }
+
+@keyframes mjPulso {
+  0% { transform: scale(1); opacity: 0.9; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* Encabezado con los colores de MJ */
+#mara-widget .mara-header {
+  background: linear-gradient(120deg, #173f5f 0%, #1f5f8b 55%, #1a7f8e 100%);
+  padding: 10px 14px;
+}
+.mj-header-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.mj-header-titulos {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.mj-header-titulos small {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 10px;
+}
+
+/* Destinos */
+.mj-destinos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mj-dest {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.mj-dest:hover:not(:disabled) {
+  background: #3b4a60;
+  border-color: #4fc2c9;
+  transform: translateX(3px);
+}
+.mj-dest:disabled { cursor: default; opacity: 0.55; }
+.mj-dest.mj-aca { border-style: dashed; }
+.mj-dest-icono {
+  font-size: 20px;
+  width: 26px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.mj-dest-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.mj-dest-texto strong { color: #ffffff; font-size: 1.05em; }
+.mj-dest-texto small { color: #94a3b8; font-size: 0.85em; }
+.mj-dest-destacado {
+  margin-bottom: 12px;
+  background: linear-gradient(120deg, #1f5f8b, #1a7f8e);
+  border-color: transparent;
+}
+.mj-dest-destacado .mj-dest-texto small { color: rgba(255, 255, 255, 0.8); }
+.mara-hint { margin-top: 4px; }

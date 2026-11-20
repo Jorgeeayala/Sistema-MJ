@@ -312,11 +312,16 @@ Integra lo útil de dos extensiones sueltas («Ekuatia Login» con CSV y
     Marangatu de la fila (`APP_AUTO_LOGIN`). La clave va de la app al login
     por el camino de siempre; nunca pasa por el popup ni se guarda.
   El puerto valida el origen igual que el resto del puente.
-- **Botón 📅 «Comprobantes» en Marangatu (`comprobantesHelper.js/.css`):**
-  «Ir a Comprobantes» recorre Declaraciones Informativas → Gestión de
-  Comprobantes → Obtener Comprob. Elect. y Virtuales (cada ventana nueva
-  retoma el paso). En esa pantalla, elegir mes y año busca con un clic. Se
-  arrastra, se bloquea y cambia de tamaño (⚙). Los CDC se marcan con la
+- **Asistente MJ en Marangatu (`asistenteMj.js/.css`, v2.18):** botón
+  redondo con el logo de MJ, abajo a la izquierda (el panel de tareas va a la
+  derecha). Abre un menú «¿A dónde vamos?» con: **Obtener comprobantes**
+  (Declaraciones Informativas → Gestión de Comprobantes → Obtener Comprob.
+  Elect. y Virtuales; cada ventana nueva retoma el paso; ahí, elegir mes y
+  año busca con un clic), **Visión integral** (Consultas), **Presentar
+  declaración** y **Menú principal**. Desde otra pantalla vuelve primero al
+  menú principal y sigue solo. Se arrastra, se bloquea y cambia de tamaño
+  (⚙). El logo se carga desde la extensión (`web_accessible_resources`, sólo
+  para Marangatu). Los CDC se marcan con la
   columna **XML** del recolector: el «Extraer / Procesar KuDE» del helper
   original no se integró (repetía el recolector, y el proceso de KuDE no
   funcionaba entre Marangatu y eKuatia).
