@@ -22,7 +22,8 @@ const NOMBRE = 'Ekuatia Login PRUEBAS';
 const ID_PRUEBAS = 'hljageieeeljncgmbbpmkflpdminodom';
 const CLAVE_PRUEBAS = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzkJaMVPY5RYXkpl3kBtadQ3IS3yjG17Aw+l+dcI0u+BlOidmPX2fXiXQuhCqrnZIiPV6pA2FZ/PqHro2jUAdlOhUYFmX8ZIXOGHYwtDa+nAWctGYWu9DycrUNDjjYQl4EFyb04Y6dZuUKRbQPgZQXZ9FOq4HCjW/8fbq3JdksPADvVEaiHdEXEcO5vNi7NOHZm57FMxuG5ivxbLJ/JG3T+2zq4r/XHCRkCCNwnulLfgKVXYu/U9y9yhjGN5rC73+VFlOM5E18cl7/O/1TnKxDT7107pGLDAPqop2exowcaa3dN0/MGhj/xJi50q4ikyuT8mwvwc2pEp0RuzHdRg0jQIDAQAB';
 
-const ORIGEN_REAL = 'https://control-total-clientes.vercel.app';
+// Origen de producción de la extensión real (el de pruebas lo reemplaza).
+const ORIGEN_REAL = 'https://mjsistema.vercel.app';
 
 function reemplazar(ruta, cambios) {
   let txt = readFileSync(ruta, 'utf8');

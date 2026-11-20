@@ -35,7 +35,7 @@ const MAX_CASILLAS = 120;
 const ALLOWED_APP_ORIGINS = new Set([
   'http://localhost:3000',
   // App publicada con la cuenta nueva (Vercel, repo MJBackendPy/Sistema-Mj).
-  'https://mjsistema.vercel.app',
+  'https://sistema-mj.vercel.app',
   // App con el módulo XML / KuDE (Jorgeeayala).
   'https://control-total-clientes-iva.vercel.app',
   // App de pruebas (mismo ID de extensión que la real).
