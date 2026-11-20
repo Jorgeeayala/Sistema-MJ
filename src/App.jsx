@@ -39,7 +39,7 @@ import { AMBIENTE_NINGUNA, resolverAmbiente } from './ambiente/ambientes';
 import PendingClientOpener from './components/PendingClientOpener';
 import GuidedTour from './components/GuidedTour';
 import { construirPasosGuia } from './guia/pasosGuia';
-const SettingsDialog = lazy(() => import('./components/SettingsDialog'));
+import SettingsHost from './components/SettingsHost';
 import { ClientsProvider, useClientsActions } from './context/ClientsContext';
 import BuscadorMarangatu from './components/BuscadorMarangatu';
 import { STORAGE_KEY_USER } from './config';
@@ -125,7 +125,9 @@ export default function App({
   // RUC a abrir en Vencimientos IVA al llegar desde el detalle del cliente.
   const [ivaOpenRuc, setIvaOpenRuc] = useState(null);
   const isMobilePeriodNav = useMediaQuery('(max-width: 860px)');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Configuración abre/cierra dentro de SettingsHost (sin redibujar App).
+  const settingsHostRef = useRef(null);
+  const setSettingsOpen = useCallback((abierto) => settingsHostRef.current?.setAbierto(abierto), []);
   const [pinChangeError, setPinChangeError] = useState('');
   const [pinChangeSubmitting, setPinChangeSubmitting] = useState(false);
   const [pinChangeNotice, setPinChangeNotice] = useState('');
@@ -776,7 +778,7 @@ export default function App({
     // liquidación que la guía está mostrando.
     if (mantener && tabActualRef.current === tab) return;
     tabChangeRef.current(tab);
-  }, []);
+  }, [setSettingsOpen]);
   const abrirGuia = useCallback(() => {
     setBuzonOpen(false);
     setAgenteOpen(false);
@@ -1397,11 +1399,8 @@ export default function App({
         />
       )}
 
-      {(settingsOpen || mustChangePin) && (
-      <Suspense fallback={null}>
-      <SettingsDialog
-        key={mustChangePin ? 'settings-must-change-pin' : 'settings-open'}
-        open={settingsOpen || mustChangePin}
+      <SettingsHost
+        ref={settingsHostRef}
         user={user}
         userRole={userRole}
         mustChangePin={mustChangePin}
@@ -1409,10 +1408,7 @@ export default function App({
         fontScale={fontScale}
         fontScaleOptions={FONT_SCALE_OPTIONS}
         error={pinChangeError}
-        submitting={pinChangeSubmitting}
-        onClose={() => {
-          if (!pinChangeSubmitting && !mustChangePin) setSettingsOpen(false);
-        }}
+        pinChangeSubmitting={pinChangeSubmitting}
         onChangePin={handleChangePin}
         onChangeUser={handleChangeUser}
         onThemeChange={setTheme}
@@ -1424,8 +1420,6 @@ export default function App({
             : null
         }
       />
-      </Suspense>
-      )}
     </div>
   );
 }

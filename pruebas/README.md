@@ -50,7 +50,7 @@ original.
 | CAMBIO-16 | Sección «Comprobantes»: registro de facturas y notas de crédito por cliente y mes (timbrado, RUC con DV, moneda, imputación IVA/IRE/IRP) y botón «Traer al formulario» en el IVA | En prueba | No |
 | CAMBIO-17 | Recibos de dinero en «Comprobantes»: emitidos por el cliente o por el estudio (honorarios), numerados solos y en PDF A4 original/duplicado con monto en letras; y recibidos por el cliente | En prueba | No |
 | CAMBIO-18 | Importar el «Detalle de comprobantes registrados» de Marangatu (RG 90): al registro de Comprobantes (todos, sin duplicar) y en Libros IVA | En prueba | No |
-| CAMBIO-19 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 (en los commits figura como CAMBIO-15) | En prueba (falta backend CDC) | No |
+| CAMBIO-19 | Traído de `Jorgeeayala/Sistema-MJ`: pestaña «XML / KuDE», lotes CDC y descarga directa de XML; extensión 2.15 (en los commits figura como CAMBIO-15) | En prueba (backend CDC nuevo: `AppsScript-CdcLotes.gs`) | No |
 
 ### CAMBIO-1 · Ficha del cliente y Buzón
 
@@ -313,13 +313,15 @@ era este commit.
 - XML de ejemplo para probar el KuDE: `pruebas/xml-kude/factura-prueba.xml`
   (factura de ₲ 131.000).
 
-**Pendiente:** el backend de los lotes (`AppsScript-CdcLotes.gs`, acciones
+**Backend de los lotes (20/11/2026):** `AppsScript-CdcLotes.gs` (acciones
 `cdcCrearLote`, `cdcListarLotes`, `cdcObtenerItems`, `cdcObtenerXml`,
-`cdcSubirXml`, `cdcReintentarFallidos`, `cdcBorrarLote`) **no está en el
-repositorio de Jorge**. Hasta sumarlo, «Lotes XML (CDC)» y lo que trae XML
-desde Drive dan error; cargar XML a mano e imprimir el KuDE funcionan igual.
-Tampoco se agregó todavía la pestaña XML a la guía interactiva
-(`src/guia/pasosGuia.jsx`).
+`cdcSubirXml`, `cdcReintentarFallidos`, `cdcBorrarLote`), escrito desde cero
+porque no estaba en el repositorio de Jorge. Guarda lotes, CDCs y XML en las
+hojas «CDC Lotes» y «CDC Items» de la planilla de administración (sin Drive,
+sin permisos nuevos). Se instala como archivo «CdcLotes» junto con el
+`AppsScript-Avisos.gs` actualizado (deriva las acciones `cdc*`). Si el worker
+externo usaba otras acciones para marcar fallas, habrá que agregarlas.
+Pendiente: la pestaña XML en la guía interactiva (`src/guia/pasosGuia.jsx`).
 
 Archivos: `src/xml/` y `src/cdc/` (nuevos), `tsconfig.json`, `package.json`,
 `package-lock.json`, `vite.config.js`, `src/App.jsx`, `src/api.js`,
