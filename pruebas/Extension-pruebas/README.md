@@ -320,7 +320,8 @@ Integra lo útil de dos extensiones sueltas («Ekuatia Login» con CSV y
   año busca con un clic), **Visión integral** (Consultas), **Presentar
   declaración** y **Menú principal**. Desde otra pantalla vuelve primero al
   menú principal y sigue solo. Se arrastra, se bloquea y cambia de tamaño
-  (⚙). El logo se carga desde la extensión (`web_accessible_resources`, sólo
+  (engranaje). Desde la 2.19 los íconos son SVG en línea (trazos de Lucide)
+  con animaciones CSS al pasar el mouse; nada de emojis. El logo se carga desde la extensión (`web_accessible_resources`, sólo
   para Marangatu). Los CDC se marcan con la
   columna **XML** del recolector: el «Extraer / Procesar KuDE» del helper
   original no se integró (repetía el recolector, y el proceso de KuDE no
