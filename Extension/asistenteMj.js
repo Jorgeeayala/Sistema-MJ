@@ -31,7 +31,7 @@
     sessionStorage.setItem('mara_tab_id', TAB_ID);
   }
 
-  // Datos de versiones anteriores (helper original y botón 📅 de la 2.16).
+  // Datos de versiones anteriores (helper original y botón de calendario de la 2.16).
   try {
     localStorage.removeItem('mara_current_cdc');
     localStorage.removeItem('mara_cdc_action');
@@ -72,10 +72,10 @@
   var YEARS = Array.from({ length: 10 }, function (_, i) { return currentYear - i; });
 
   var DESTINOS = [
-    { id: 'comprobantes', icono: '🧾', titulo: 'Obtener comprobantes', detalle: 'Comprobantes electrónicos y virtuales (XML)' },
-    { id: 'vision', icono: '🔎', titulo: 'Visión integral', detalle: 'Consultas · declaraciones presentadas' },
-    { id: 'presentar', icono: '📤', titulo: 'Presentar declaración', detalle: 'Formularios (IVA 120 y otros)' },
-    { id: 'inicio', icono: '🏠', titulo: 'Menú principal', detalle: 'Volver al inicio de Marangatu' },
+    { id: 'comprobantes', titulo: 'Obtener comprobantes', detalle: 'Comprobantes electrónicos y virtuales (XML)' },
+    { id: 'vision', titulo: 'Visión integral', detalle: 'Consultas · declaraciones presentadas' },
+    { id: 'presentar', titulo: 'Presentar declaración', detalle: 'Formularios (IVA 120 y otros)' },
+    { id: 'inicio', titulo: 'Menú principal', detalle: 'Volver al inicio de Marangatu' },
   ];
 
   var SIZES = {
@@ -138,6 +138,29 @@
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
   function getMonthObj(val) { return MONTHS.find(function (x) { return x.value === val; }); }
+  // Íconos SVG en línea (trazos de Lucide, licencia ISC, la misma familia que
+  // usa la app). Nada de emojis: se ven igual en cualquier PC y heredan el
+  // color. Las animaciones (al pasar el mouse, al aparecer) están en el CSS.
+  var ICONOS = {
+    comprobantes: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+    vision: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    presentar: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/>',
+    inicio: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+    calendario: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+    ajustes: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    cerrar: '<path d="M18 6 6 18M6 6l12 12"/>',
+    ok: '<path class="mj-trazo" d="M20 6 9 17l-5-5"/>',
+    alerta: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+    candado: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    abierto: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+    reiniciar: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    volver: '<path d="m12 19-7-7 7-7M19 12H5"/>',
+    seguir: '<path d="m9 18 6-6-6-6"/>',
+  };
+  function svg(nombre, clase) {
+    return '<svg class="mj-ico' + (clase ? ' ' + clase : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONOS[nombre] || '') + '</svg>';
+  }
+
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
   function waitFor(fn, timeout) {
@@ -219,12 +242,12 @@
     body().innerHTML = '<div class="mara-nav-status"><div class="mara-nav-spinner"></div><span>' + text + '</span></div>';
   }
   function navError(text) {
-    body().innerHTML = '<div class="mara-status error">' + text + '</div>';
+    body().innerHTML = '<div class="mara-status error mj-estado">' + svg('alerta') + '<span>' + text + '</span></div>';
     clearNav();
     setTimeout(function () { if (state.open) showMenu(); }, 2200);
   }
   function navDone(text) {
-    body().innerHTML = '<div class="mara-status success">' + text + '</div>';
+    body().innerHTML = '<div class="mara-status success mj-estado">' + svg('ok', 'mj-dibuja') + '<span>' + text + '</span></div>';
     setTimeout(closeWidget, 900);
   }
 
@@ -238,15 +261,16 @@
     updateContextBar();
     var html = '';
     if (PAGE.id === 'comprobantes') {
-      html += '<button class="mj-dest mj-dest-destacado" id="mj-periodo"><span class="mj-dest-icono">📅</span>' +
+      html += '<button class="mj-dest mj-dest-destacado" id="mj-periodo"><span class="mj-dest-icono">' + svg('calendario') + '</span>' +
         '<span class="mj-dest-texto"><strong>Buscar por mes</strong><small>Elegir mes y año en esta pantalla</small></span></button>';
     }
     html += '<p class="mara-step-label">¿A dónde vamos?</p><div class="mj-destinos">';
     DESTINOS.forEach(function (d) {
       var aca = d.id === PAGE.id || (d.id === 'inicio' && PAGE.id === 'main');
       html += '<button class="mj-dest' + (aca ? ' mj-aca' : '') + '" data-dest="' + d.id + '"' + (aca ? ' disabled' : '') + '>' +
-        '<span class="mj-dest-icono">' + d.icono + '</span>' +
-        '<span class="mj-dest-texto"><strong>' + d.titulo + '</strong><small>' + (aca ? 'Ya estás acá' : d.detalle) + '</small></span></button>';
+        '<span class="mj-dest-icono mj-ico-' + d.id + '">' + svg(d.id) + '</span>' +
+        '<span class="mj-dest-texto"><strong>' + d.titulo + '</strong><small>' + (aca ? 'Ya estás acá' : d.detalle) + '</small></span>' +
+        (aca ? '' : svg('seguir', 'mj-flecha')) + '</button>';
     });
     html += '</div>';
     body().innerHTML = html;
@@ -261,7 +285,7 @@
   function irA(dest) {
     if (dest === 'inicio') {
       clearNav();
-      if (PAGE.id === 'main') { navDone('✔ Ya estás en el menú principal'); return; }
+      if (PAGE.id === 'main') { navDone('Ya estás en el menú principal'); return; }
       navStatus('Volviendo al menú principal…');
       location.href = INICIO_URL;
       return;
@@ -303,7 +327,7 @@
             .then(function (el2) {
               saveNav('comprobantes', 3);
               clickElement(el2);
-              navDone('✔ Abriendo Gestión de Comprobantes…');
+              navDone('Abriendo Gestión de Comprobantes…');
             })
             .catch(function () { navError('No encontré Gestión de Comprobantes'); });
         })
@@ -325,7 +349,7 @@
         .then(function (target) {
           clearNav();
           target.click();
-          navDone('✔ Abriendo Obtener Comprobantes…');
+          navDone('Abriendo Obtener Comprobantes…');
         })
         .catch(function () { navError('No encontré Obtener Comprobantes'); });
       return;
@@ -346,7 +370,7 @@
           .then(function (link) {
             clearNav();
             clickElement(link);
-            navDone('✔ Abriendo Visión integral…');
+            navDone('Abriendo Visión integral…');
           })
           .catch(function () { navError('No encontré Visión integral del contribuyente'); });
       })
@@ -364,7 +388,7 @@
         clearNav();
         // Clic dentro de la página (como una persona): Marangatu abre su ventana.
         link.click();
-        navDone('✔ Abriendo Presentar declaración…');
+        navDone('Abriendo Presentar declaración…');
       })
       .catch(function () { navError('No encontré Presentar declaración'); });
   }
@@ -377,11 +401,11 @@
     if (hasYear) {
       html += '<button class="mara-year-bar" id="mara-change-year">' +
         '<span class="mara-year-bar-text">Año: <strong>' + state.lastYear + '</strong></span>' +
-        '<span class="mara-year-bar-arrow">cambiar ›</span></button>';
+        '<span class="mara-year-bar-arrow">cambiar ' + svg('seguir') + '</span></button>';
     }
     html += '<p class="mara-step-label">Elegí el mes</p><div class="mara-month-grid" id="mara-months"></div>' +
       '<p class="mara-hint">Para bajar XML, marcá los CDC en la columna <b>XML</b> de la tabla («Marcar todas las páginas» y «Crear lote»).</p>' +
-      '<button class="mara-back-btn" id="mara-back">← Destinos</button>';
+      '<button class="mara-back-btn" id="mara-back">' + svg('volver') + ' Destinos</button>';
     body().innerHTML = html;
 
     var container = document.getElementById('mara-months');
@@ -430,7 +454,7 @@
     if (label) label.click();
     setTimeout(function () {
       var btn = xpathEl('//*[@id="botones"]/div/div[2]/button');
-      if (btn) { btn.click(); showStatusInBody(m.full + ' ' + year + ' ✔', 'success'); setTimeout(closeWidget, 800); }
+      if (btn) { btn.click(); showStatusInBody(m.full + ' ' + year, 'success'); setTimeout(closeWidget, 800); }
       else { showStatusInBody('Botón de búsqueda no encontrado', 'error'); setTimeout(showMonths, 1500); }
     }, 300);
   }
@@ -452,7 +476,8 @@
     }, 400);
   }
   function showStatusInBody(msg, type) {
-    body().innerHTML = '<div class="mara-status ' + type + '">' + msg + '</div>';
+    var ico = type === 'success' ? svg('ok', 'mj-dibuja') : type === 'error' ? svg('alerta') : '<div class="mara-nav-spinner"></div>';
+    body().innerHTML = '<div class="mara-status mj-estado ' + type + '">' + ico + '<span>' + msg + '</span></div>';
   }
 
   // --- Configuración ---------------------------------------------------------------
@@ -461,14 +486,14 @@
     body().innerHTML =
       '<p class="mara-step-label">Configuración</p>' +
       '<div class="mara-config-item"><span class="mara-config-label">Bloquear posición</span>' +
-        '<button class="mara-toggle ' + (config.locked ? 'active' : '') + '" id="mara-toggle-lock">' + (config.locked ? '&#128274; Bloqueado' : '&#128275; Libre') + '</button></div>' +
+        '<button class="mara-toggle ' + (config.locked ? 'active' : '') + '" id="mara-toggle-lock">' + (config.locked ? svg('candado') + ' Bloqueado' : svg('abierto') + ' Libre') + '</button></div>' +
       '<div class="mara-config-item"><span class="mara-config-label">Tamaño</span><div class="mara-size-btns">' +
         '<button class="mara-size-btn ' + (config.size === 'small' ? 'active' : '') + '" data-size="small">S</button>' +
         '<button class="mara-size-btn ' + (config.size === 'medium' ? 'active' : '') + '" data-size="medium">M</button>' +
         '<button class="mara-size-btn ' + (config.size === 'large' ? 'active' : '') + '" data-size="large">L</button>' +
       '</div></div>' +
-      '<div class="mara-config-item"><span class="mara-config-label">Posición</span><button class="mara-reset-btn" id="mara-reset-pos">&#8634; Abajo a la izquierda</button></div>' +
-      '<button class="mara-back-btn" id="mara-back">← Volver</button>';
+      '<div class="mara-config-item"><span class="mara-config-label">Posición</span><button class="mara-reset-btn" id="mara-reset-pos">' + svg('reiniciar') + ' Abajo a la izquierda</button></div>' +
+      '<button class="mara-back-btn" id="mara-back">' + svg('volver') + ' Volver</button>';
 
     document.getElementById('mara-toggle-lock').addEventListener('click', function (e) {
       e.stopPropagation(); config.locked = !config.locked; saveConfig(); showConfig();
@@ -493,8 +518,8 @@
           '<span class="mj-header-titulos"><span class="mara-header-title">Asistente MJ</span><small>Navegación en Marangatu</small></span>' +
         '</div>' +
         '<div class="mara-header-right">' +
-          '<button class="mara-config-btn" id="mara-config-btn" title="Configuración">&#9881;</button>' +
-          '<button class="mara-close-btn" id="mara-close" title="Cerrar">✕</button>' +
+          '<button class="mara-config-btn" id="mara-config-btn" title="Configuración">' + svg('ajustes', 'mj-gira') + '</button>' +
+          '<button class="mara-close-btn" id="mara-close" title="Cerrar">' + svg('cerrar') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="mara-context-bar" id="mara-context-bar"></div>' +
