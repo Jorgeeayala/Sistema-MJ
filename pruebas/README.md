@@ -313,14 +313,15 @@ era este commit.
 - XML de ejemplo para probar el KuDE: `pruebas/xml-kude/factura-prueba.xml`
   (factura de ₲ 131.000).
 
-**Backend de los lotes (20/11/2026):** `AppsScript-CdcLotes.gs` (acciones
-`cdcCrearLote`, `cdcListarLotes`, `cdcObtenerItems`, `cdcObtenerXml`,
-`cdcSubirXml`, `cdcReintentarFallidos`, `cdcBorrarLote`), escrito desde cero
-porque no estaba en el repositorio de Jorge. Guarda lotes, CDCs y XML en las
-hojas «CDC Lotes» y «CDC Items» de la planilla de administración (sin Drive,
-sin permisos nuevos). Se instala como archivo «CdcLotes» junto con el
-`AppsScript-Avisos.gs` actualizado (deriva las acciones `cdc*`). Si el worker
-externo usaba otras acciones para marcar fallas, habrá que agregarlas.
+**Backend de los lotes:** `AppsScript-CdcLotes.gs` es el módulo original del
+proyecto de Apps Script (no estaba en ningún repositorio; se sumó el
+20/11/2026). Acciones de la app (`cdcCrearLote`, `cdcListarLotes`,
+`cdcObtenerItems`, `cdcObtenerXml`, `cdcSubirXml`, `cdcReintentarFallidos`,
+`cdcBorrarLote`) y del worker (`cdcTomarLote`, `cdcReportarItem`,
+`cdcLiberarLote`). Lotes e ítems en las hojas «CDC Lotes» y «CDC Items» de la
+planilla de administración; los XML en la carpeta de Drive «CDC XML
+descargados» (hay que ejecutar una vez `autorizarDriveCdc`). El
+`AppsScript-Avisos.gs` de este repo ya deriva las acciones `cdc*`.
 Pendiente: la pestaña XML en la guía interactiva (`src/guia/pasosGuia.jsx`).
 
 Archivos: `src/xml/` y `src/cdc/` (nuevos), `tsconfig.json`, `package.json`,
